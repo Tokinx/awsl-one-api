@@ -9,7 +9,6 @@ import { Channels } from './pages/Channels'
 import { Tokens } from './pages/Tokens'
 import { Pricing } from './pages/Pricing'
 import { ApiTest } from './pages/ApiTest'
-import { Database } from './pages/Database'
 import { NotFound } from './pages/NotFound'
 
 const queryClient = new QueryClient({
@@ -35,6 +34,20 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function HomeRoute() {
+  const { isAuthenticated, isLoading } = useAuthStore()
+
+  if (isLoading) {
+    return null
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to="/channels" replace />
+  }
+
+  return <Dashboard />
+}
+
 function App() {
   const { checkAuth } = useAuthStore()
 
@@ -47,7 +60,7 @@ function App() {
       <Router>
         <AppLayout>
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<HomeRoute />} />
             <Route path="/api-test" element={<ApiTest />} />
             <Route
               path="/channels"
@@ -70,14 +83,6 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Pricing />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/database"
-              element={
-                <ProtectedRoute>
-                  <Database />
                 </ProtectedRoute>
               }
             />

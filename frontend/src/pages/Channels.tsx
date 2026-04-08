@@ -84,7 +84,7 @@ export function Channels() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['channels'] })
-      addToast(editingKey ? '频道更新成功' : '频道添加成功', 'success')
+      addToast(editingKey ? '渠道更新成功' : '渠道添加成功', 'success')
       resetForm()
       setView('list')
     },
@@ -99,7 +99,7 @@ export function Channels() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['channels'] })
-      addToast('频道已删除', 'success')
+      addToast('渠道已删除', 'success')
     },
     onError: (error: any) => {
       addToast('删除失败：' + error.message, 'error')
@@ -148,14 +148,14 @@ export function Channels() {
   }
 
   const handleDelete = (key: string) => {
-    if (confirm(`确定要删除此频道吗？`)) {
+    if (confirm(`确定要删除此渠道吗？`)) {
       deleteMutation.mutate(key)
     }
   }
 
   const handleSave = () => {
     if (!channelKey) {
-      addToast('请填写频道标识', 'error')
+      addToast('请填写渠道标识', 'error')
       return
     }
 
@@ -276,7 +276,7 @@ export function Channels() {
   if (view === 'list') {
     return (
       <PageContainer
-        title="频道管理"
+        title="渠道管理"
         description="配置 AI 服务提供商连接"
         actions={
           <div className="flex items-center gap-2">
@@ -296,7 +296,7 @@ export function Channels() {
             <div className="relative max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="搜索频道..."
+                placeholder="搜索渠道..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
@@ -318,13 +318,13 @@ export function Channels() {
               <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
                 <LinkIcon className="h-7 w-7 text-primary" />
               </div>
-              <h3 className="font-semibold text-lg mb-2">添加您的第一个频道</h3>
+              <h3 className="font-semibold text-lg mb-2">添加您的第一个渠道</h3>
               <p className="text-muted-foreground text-sm text-center max-w-sm mb-6">
-                频道连接到 AI 服务提供商（如 OpenAI、Azure、Claude），用于代理和转发 API 请求。
+                渠道连接到 AI 服务提供商（如 OpenAI、Azure、Claude），用于代理和转发 API 请求。
               </p>
               <Button onClick={handleAdd} size="lg">
                 <Plus className="h-4 w-4 mr-2" />
-                添加频道
+                添加渠道
               </Button>
             </CardContent>
           </Card>
@@ -421,7 +421,7 @@ export function Channels() {
               })}
               {filteredData?.length === 0 && searchQuery && (
                 <div className="p-8 text-center text-muted-foreground">
-                  未找到匹配的频道
+                  未找到匹配的渠道
                 </div>
               )}
             </div>
@@ -442,7 +442,7 @@ export function Channels() {
             返回列表
           </Button>
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold tracking-tight">{editingKey ? '编辑频道' : '添加频道'}</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{editingKey ? '编辑渠道' : '添加渠道'}</h1>
             <Button variant="outline" size="sm" onClick={toggleEditMode}>
               {editMode === 'form' ? <FileJson className="h-4 w-4 mr-1" /> : <FileText className="h-4 w-4 mr-1" />}
               {editMode === 'form' ? 'JSON' : '表单'}
@@ -454,7 +454,7 @@ export function Channels() {
         {/* Channel Key */}
         <Card>
           <CardContent className="p-5">
-            <h3 className="font-medium mb-4">频道标识</h3>
+            <h3 className="font-medium mb-4">渠道标识</h3>
             <p className="text-sm text-muted-foreground mb-3">用于内部识别的唯一标识</p>
             <Input
               value={channelKey}
@@ -474,7 +474,7 @@ export function Channels() {
                 <h3 className="font-medium mb-4">基本信息</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-sm">频道名称 <span className="text-destructive">*</span></Label>
+                    <Label className="text-sm">渠道名称 <span className="text-destructive">*</span></Label>
                     <Input
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -482,7 +482,7 @@ export function Channels() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-sm">频道类型 <span className="text-destructive">*</span></Label>
+                    <Label className="text-sm">渠道类型 <span className="text-destructive">*</span></Label>
                     <Select
                       value={formData.type}
                       onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
@@ -547,7 +547,7 @@ export function Channels() {
                       <Cpu className="h-4 w-4 text-muted-foreground" />
                       支持模型
                     </h3>
-                    <p className="text-sm text-muted-foreground">用于声明这个频道接受哪些请求模型名，可填写精确值或通配符</p>
+                    <p className="text-sm text-muted-foreground">用于声明这个渠道接受哪些请求模型名，可填写精确值或通配符</p>
                   </div>
                   <Button type="button" variant="outline" size="sm" onClick={addSupportedModelRow}>
                     <Plus className="h-4 w-4 mr-1" />
@@ -678,7 +678,7 @@ export function Channels() {
             ) : (
               <>
                 <Check className="h-4 w-4 mr-2" />
-                保存频道
+                保存渠道
               </>
             )}
           </Button>

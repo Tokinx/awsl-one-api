@@ -1,6 +1,7 @@
-import { Context, Hono, Next } from "hono"
+import { Hono } from "hono"
 import { fromHono } from 'chanfana';
 import { DBInitializeEndpoint } from "./db_api"
+import db from "../db"
 import {
     ChannelGetEndpoint, ChannelUpsertEndpoint, ChannelDeleteEndpoint
 } from "./channel_api"
@@ -22,6 +23,11 @@ app.use('/api/admin/*', async (c, next) => {
     if (!token || !adminToken || token !== adminToken) {
         return c.text("Unauthorized", 401);
     }
+    await next();
+});
+
+app.use('/api/admin/*', async (c, next) => {
+    await db.ensureReady(c);
     await next();
 });
 

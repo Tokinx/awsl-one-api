@@ -44,10 +44,10 @@ flowchart LR
 awsl-one-api/
 ├── src/                          # 源代码目录
 │   ├── admin/                    # 管理接口
-│   │   ├── channel_api.ts        # 频道管理 API
+│   │   ├── channel_api.ts        # 渠道管理 API
 │   │   ├── token_api.ts          # Token 管理 API
 │   │   ├── pricing_api.ts        # 定价管理 API
-│   │   ├── db_api.ts             # 数据库管理 API
+│   │   ├── db_api.ts             # 数据库初始化 API
 │   │   └── index.ts              # 管理接口路由
 │   ├── providers/                # AI 服务提供商
 │   │   ├── azure-openai-proxy.ts # Azure OpenAI 代理
@@ -135,29 +135,28 @@ pnpm run deploy
 
 #### 初始化数据库
 
-首次部署后，需要通过 Web 界面初始化数据库：
+系统会在首次访问需要数据库的接口时自动创建缺失表结构并补齐版本信息，通常不再需要手动初始化。
+
+前端界面不再提供单独的数据库管理页。
+
+#### 渠道配置
 
 1. 访问 `https://your-domain.com`
 2. 使用管理员 Token 登录
-3. 切换到 **📊 数据库** 标签
-4. 点击 **🔄 初始化数据库** 按钮
+3. 进入 **🔗 渠道管理** 页面
+4. 点击 **➕ 添加渠道** 按钮
+5. 选择渠道类型（OpenAI、Azure OpenAI、Claude、Responses）
+6. 填写渠道标识和配置信息（名称、端点、API 密钥、模型映射）
+7. 点击 **💾 保存渠道** 按钮
 
-#### 频道配置
-
-1. 在 Web 界面切换到 **🔗 频道管理** 标签
-2. 点击 **➕ 添加频道** 按钮
-3. 选择频道类型（OpenAI、Azure OpenAI、Claude、Responses）
-4. 填写频道标识和配置信息（名称、端点、API 密钥、模型映射）
-5. 点击 **💾 保存频道** 按钮
-
-**提示**：系统会根据选择的频道类型自动显示相应的配置字段。
+**提示**：系统会根据选择的渠道类型自动显示相应的配置字段。
 
 #### Token 创建和使用
 
 1. 在 Web 界面切换到 **🔑 令牌管理** 标签
 2. 点击 **➕ 添加令牌** 按钮
 3. 填写令牌名称，系统会自动生成 `sk-` 开头的 Token
-4. 配置允许访问的频道和配额
+4. 配置允许访问的渠道和配额
 5. 点击 **💾 保存令牌** 按钮
 6. 使用 **📋 复制** 按钮获取 Token 用于 API 调用
 
@@ -218,8 +217,7 @@ curl https://your-domain.com/v1/responses \
 
 访问 `https://your-domain.com` 即可使用 Web 管理界面，功能包括：
 
-- **📊 数据库管理**：一键初始化数据库表结构
-- **🔗 频道配置管理**：添加、编辑、删除 AI 服务提供商频道（支持 OpenAI、Azure OpenAI、Claude、OpenAI Responses、Azure Responses）
+- **🔗 渠道管理**：添加、编辑、删除 AI 服务提供商渠道（支持 OpenAI、Azure OpenAI、Claude、OpenAI Responses、Azure Responses）
 - **🔑 API Token 管理**：生成、管理和监控 API Token 使用情况
 - **💰 定价配置**：灵活配置不同模型的定价策略
 - **🧪 API 测试工具**：内置 API 测试界面，支持实时调试和错误排查
@@ -228,7 +226,7 @@ curl https://your-domain.com/v1/responses \
 
 - **现代化 UI**：响应式设计，支持桌面和移动设备
 - **实时反馈**：操作结果即时显示，支持悬浮提示
-- **智能表单**：自动生成 Token、JSON 格式验证、一键复制功能，根据频道类型智能显示配置字段
+- **智能表单**：自动生成 Token、JSON 格式验证、一键复制功能，根据渠道类型智能显示配置字段
 - **安全认证**：管理员 Token 认证，数据安全保护
 
 ### 配置说明
@@ -313,7 +311,7 @@ curl https://your-domain.com/v1/responses \
 
 **配置字段说明**：
 
-- `name`: 频道显示名称
+- `name`: 渠道显示名称
 - `type`: 服务提供商类型（`openai`、`azure-openai`、`claude`、`openai-responses`、`azure-openai-responses`）
 - `endpoint`: API 端点地址
 - `api_key`: API 密钥
@@ -335,7 +333,7 @@ curl https://your-domain.com/v1/responses \
 **配置字段说明**：
 
 - `name`: Token 名称，便于管理识别
-- `channel_keys`: 允许访问的频道列表，空数组表示允许所有频道
+- `channel_keys`: 允许访问的渠道列表，空数组表示允许所有渠道
 - `total_quota`: 总配额（基础单位：1百万 token = $1.00）
 
 ### 监控与统计

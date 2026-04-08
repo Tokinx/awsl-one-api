@@ -188,9 +188,6 @@ export const apiClient = {
       body: JSON.stringify(config),
     }),
 
-  // Database APIs
-  initDatabase: () => request('/api/admin/db_initialize', { method: 'POST' }),
-
   // API Test - 使用自定义 token，不走通用拦截器
   testApi: async (endpoint: string, token: string, body: unknown): Promise<TestResponse> => {
     const url = `${BASE_URL}${endpoint}`

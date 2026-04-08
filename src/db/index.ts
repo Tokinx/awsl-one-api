@@ -24,54 +24,69 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 `
 
+let dbReadyPromise: Promise<void> | null = null;
+
+const getInitQuery = () => DB_INIT_QUERIES.replace(/[\r\n]/g, "")
+    .split(";")
+    .map((query) => query.trim())
+    .filter(Boolean)
+    .join(";\n");
+
+const initializeSchema = async (c: Context<HonoCustomType>) => {
+    await c.env.DB.exec(getInitQuery());
+};
+
 const dbOperations = {
     initialize: async (c: Context<HonoCustomType>) => {
-        // remove all \r and \n characters from the query string
-        // split by ; and join with a ;\n
-        const query = DB_INIT_QUERIES.replace(/[\r\n]/g, "")
-            .split(";")
-            .map((query) => query.trim())
-            .join(";\n");
-        await c.env.DB.exec(query);
-
-        const version = await getSetting(c, CONSTANTS.DB_VERSION_KEY);
-        if (version) {
-            return c.json({ message: "Database already initialized" });
-        }
-        await saveSetting(c, CONSTANTS.DB_VERSION_KEY, CONSTANTS.DB_VERSION);
+        await initializeSchema(c);
     },
     migrate: async (c: Context<HonoCustomType>) => {
+        await initializeSchema(c);
+
         const version = await getSetting(c, CONSTANTS.DB_VERSION_KEY);
-        if (version != CONSTANTS.DB_VERSION) {
-            const channels = await c.env.DB.prepare(
-                "SELECT key, value FROM channel_config"
-            ).all<Pick<ChannelConfigRow, "key" | "value">>();
+        if (version === CONSTANTS.DB_VERSION) {
+            return;
+        }
 
-            for (const row of channels.results || []) {
-                const config = (() => {
-                    try {
-                        return JSON.parse(row.value) as ChannelConfig;
-                    } catch {
-                        return null;
-                    }
-                })();
+        const channels = await c.env.DB.prepare(
+            "SELECT key, value FROM channel_config"
+        ).all<Pick<ChannelConfigRow, "key" | "value">>();
 
-                if (!config) {
-                    continue;
+        for (const row of channels.results || []) {
+            const config = (() => {
+                try {
+                    return JSON.parse(row.value) as ChannelConfig;
+                } catch {
+                    return null;
                 }
+            })();
 
-                config.supported_models = Object.keys(config.deployment_mapper || {});
-
-                await c.env.DB.prepare(
-                    `UPDATE channel_config
-                     SET value = ?, updated_at = datetime('now')
-                     WHERE key = ?`
-                ).bind(JSON.stringify(config), row.key).run();
+            if (!config) {
+                continue;
             }
 
-            // Update the version in the settings table
-            await saveSetting(c, CONSTANTS.DB_VERSION_KEY, CONSTANTS.DB_VERSION);
+            config.supported_models = Object.keys(config.deployment_mapper || {});
+
+            await c.env.DB.prepare(
+                `UPDATE channel_config
+                 SET value = ?, updated_at = datetime('now')
+                 WHERE key = ?`
+            ).bind(JSON.stringify(config), row.key).run();
         }
+
+        await saveSetting(c, CONSTANTS.DB_VERSION_KEY, CONSTANTS.DB_VERSION);
+    },
+    ensureReady: async (c: Context<HonoCustomType>) => {
+        if (!dbReadyPromise) {
+            dbReadyPromise = (async () => {
+                await dbOperations.migrate(c);
+            })().catch((error) => {
+                dbReadyPromise = null;
+                throw error;
+            });
+        }
+
+        await dbReadyPromise;
     },
     getVersion: async (c: Context<HonoCustomType>): Promise<string | null> => {
         return await getSetting(c, CONSTANTS.DB_VERSION_KEY);

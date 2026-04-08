@@ -16,7 +16,7 @@ const features = [
   {
     icon: Gauge,
     title: '负载均衡',
-    description: '自动在多个频道间分配请求，确保高可用性。',
+    description: '自动在多个渠道间分配请求，确保高可用性。',
     gradient: 'from-emerald-500/10 to-teal-500/10',
     iconBg: 'from-emerald-500 to-teal-500',
     delay: '50ms',
@@ -41,13 +41,13 @@ const features = [
 
 const steps = [
   { num: '01', title: '管理员登录', desc: '使用管理员令牌登录系统', color: 'text-blue-500' },
-  { num: '02', title: '配置频道', desc: '添加 AI 服务提供商频道', color: 'text-emerald-500' },
+  { num: '02', title: '配置渠道', desc: '添加 AI 服务提供商渠道', color: 'text-emerald-500' },
   { num: '03', title: '创建令牌', desc: '为应用创建 API 令牌', color: 'text-amber-500' },
   { num: '04', title: '开始使用', desc: '使用令牌调用 API', color: 'text-violet-500' },
 ]
 
 export function Dashboard() {
-  const { isAuthenticated, openAuthModal } = useAuthStore()
+  const { openAuthModal } = useAuthStore()
 
   return (
     <div className="animate-in">
@@ -69,29 +69,13 @@ export function Dashboard() {
                 统一的 AI 模型接口网关。支持多服务商接入、智能负载均衡与精确用量追踪。
               </p>
               <div className="flex flex-wrap gap-3">
-                {isAuthenticated ? (
-                  <>
-                    <Button size="lg" asChild className="h-12 px-6 text-[15px] rounded-xl shadow-lg shadow-primary/20">
-                      <Link to="/channels">
-                        管理频道
-                        <ArrowRight className="h-4 w-4 ml-1" />
-                      </Link>
-                    </Button>
-                    <Button variant="outline" size="lg" asChild className="h-12 px-6 text-[15px] rounded-xl">
-                      <Link to="/api-test">测试 API</Link>
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button size="lg" onClick={openAuthModal} className="h-12 px-6 text-[15px] rounded-xl shadow-lg shadow-primary/20">
-                      管理员登录
-                      <ArrowRight className="h-4 w-4 ml-1" />
-                    </Button>
-                    <Button variant="outline" size="lg" asChild className="h-12 px-6 text-[15px] rounded-xl">
-                      <Link to="/api-test">体验 API</Link>
-                    </Button>
-                  </>
-                )}
+                <Button size="lg" onClick={openAuthModal} className="h-12 px-6 text-[15px] rounded-xl shadow-lg shadow-primary/20">
+                  管理员登录
+                  <ArrowRight className="h-4 w-4 ml-1" />
+                </Button>
+                <Button variant="outline" size="lg" asChild className="h-12 px-6 text-[15px] rounded-xl">
+                  <Link to="/api-test">体验 API</Link>
+                </Button>
               </div>
             </div>
           </div>

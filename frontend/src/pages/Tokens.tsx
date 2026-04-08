@@ -358,7 +358,7 @@ export function Tokens() {
                       </div>
                       <div className="flex items-center gap-4 text-sm">
                         <span className="text-muted-foreground">
-                          频道: <span className="text-foreground">{channelKeys.length === 0 ? '全部' : `${channelKeys.length}个`}</span>
+                          渠道: <span className="text-foreground">{channelKeys.length === 0 ? '全部' : `${channelKeys.length}个`}</span>
                         </span>
                         <span className="text-muted-foreground">
                           配额: <span className="text-foreground">{formatCurrency(token.usage || 0)}/{formatCurrency(config.total_quota || 0)}</span>
@@ -390,7 +390,7 @@ export function Tokens() {
                       </div>
                       <div className="w-24 text-sm text-center flex-shrink-0">
                         <span className="px-2 py-1 rounded-md bg-muted text-muted-foreground">
-                          {channelKeys.length === 0 ? '全部' : `${channelKeys.length} 频道`}
+                          {channelKeys.length === 0 ? '全部' : `${channelKeys.length} 渠道`}
                         </span>
                       </div>
                       <div className="w-48 flex-shrink-0">
@@ -508,9 +508,9 @@ export function Tokens() {
               <CardContent className="p-5">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h3 className="font-medium">频道访问权限</h3>
+                    <h3 className="font-medium">渠道访问权限</h3>
                     <p className="text-sm text-muted-foreground">
-                      {selectedChannels.length === 0 ? '允许访问所有频道' : `已选择 ${selectedChannels.length} 个频道`}
+                      {selectedChannels.length === 0 ? '允许访问所有渠道' : `已选择 ${selectedChannels.length} 个渠道`}
                     </p>
                   </div>
                 </div>
@@ -518,8 +518,8 @@ export function Tokens() {
                   <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
                     <AlertCircle className="h-5 w-5 text-muted-foreground" />
                     <div>
-                      <p className="text-sm font-medium">暂无可用频道</p>
-                      <p className="text-xs text-muted-foreground">请先在频道管理中添加频道</p>
+                      <p className="text-sm font-medium">暂无可用渠道</p>
+                      <p className="text-xs text-muted-foreground">请先在渠道管理中添加渠道</p>
                     </div>
                   </div>
                 ) : (

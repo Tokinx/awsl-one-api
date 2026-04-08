@@ -1,4 +1,5 @@
 import { ReactNode, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import {
   Dialog,
@@ -21,12 +22,13 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
+  const navigate = useNavigate()
   const [adminToken, setAdminToken] = useState('')
   const [authError, setAuthError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-  const { login, showAuthModal, closeAuthModal, openAuthModal } = useAuthStore()
+  const { login, showAuthModal, closeAuthModal, isAuthenticated, isLoading: isAuthLoading } = useAuthStore()
   const { addToast } = useToast()
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
@@ -37,7 +39,9 @@ export function AppLayout({ children }: AppLayoutProps) {
     try {
       await login(adminToken)
       setAdminToken('')
+      setIsMobileNavOpen(false)
       addToast('登录成功', 'success')
+      navigate('/channels', { replace: true })
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : '管理员令牌无效')
     } finally {
@@ -47,34 +51,37 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar
-        onAuthClick={openAuthModal}
-        className="hidden lg:flex"
-        collapsed={isSidebarCollapsed}
-        onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
-        showCollapseToggle
-      />
+      {isAuthenticated && !isAuthLoading && (
+        <Sidebar
+          className="hidden lg:flex"
+          collapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
+          showCollapseToggle
+        />
+      )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between border-b bg-card/80 glass px-4 py-2.5 lg:hidden sticky top-0 z-30">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9"
-            onClick={() => setIsMobileNavOpen(true)}
-            aria-label="打开侧边栏"
-          >
-            <Menu className="h-4 w-4" />
-          </Button>
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center">
-              <Zap className="h-3.5 w-3.5 text-white" />
+        {isAuthenticated && !isAuthLoading && (
+          <header className="flex items-center justify-between border-b bg-card/80 glass px-4 py-2.5 lg:hidden sticky top-0 z-30">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9"
+              onClick={() => setIsMobileNavOpen(true)}
+              aria-label="打开侧边栏"
+            >
+              <Menu className="h-4 w-4" />
+            </Button>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center">
+                <Zap className="h-3.5 w-3.5 text-white" />
+              </div>
+              <span className="font-semibold text-sm tracking-tight">Awsl One API</span>
             </div>
-            <span className="font-semibold text-sm tracking-tight">Awsl One API</span>
-          </div>
-          <div className="h-9 w-9" />
-        </header>
+            <div className="h-9 w-9" />
+          </header>
+        )}
 
         <main className="flex-1 overflow-y-auto bg-background">
           <div className="mx-auto max-w-7xl w-full">
@@ -83,7 +90,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </main>
       </div>
 
-      {isMobileNavOpen && (
+      {isAuthenticated && !isAuthLoading && isMobileNavOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -91,7 +98,6 @@ export function AppLayout({ children }: AppLayoutProps) {
           />
           <div className="absolute inset-y-0 left-0 w-72 max-w-[85%] shadow-2xl">
             <Sidebar
-              onAuthClick={openAuthModal}
               onNavigate={() => setIsMobileNavOpen(false)}
               onClose={() => setIsMobileNavOpen(false)}
               collapsed={false}

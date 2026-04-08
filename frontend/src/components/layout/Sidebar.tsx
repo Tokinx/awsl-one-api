@@ -1,16 +1,13 @@
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import {
-  LayoutDashboard,
-  TestTube2,
   Link as LinkIcon,
   Key,
   DollarSign,
-  Database,
+  TestTube2,
   Github,
   Moon,
   Sun,
-  LogIn,
   LogOut,
   X,
   PanelLeftClose,
@@ -24,20 +21,16 @@ interface NavItem {
   title: string
   href: string
   icon: React.ComponentType<{ className?: string }>
-  adminOnly?: boolean
 }
 
 const navItems: NavItem[] = [
-  { title: '仪表盘', href: '/', icon: LayoutDashboard },
+  { title: '渠道管理', href: '/channels', icon: LinkIcon },
+  { title: '令牌管理', href: '/tokens', icon: Key },
+  { title: '定价管理', href: '/pricing', icon: DollarSign },
   { title: 'API 测试', href: '/api-test', icon: TestTube2 },
-  { title: '频道管理', href: '/channels', icon: LinkIcon, adminOnly: true },
-  { title: '令牌管理', href: '/tokens', icon: Key, adminOnly: true },
-  { title: '定价管理', href: '/pricing', icon: DollarSign, adminOnly: true },
-  { title: '数据库', href: '/database', icon: Database, adminOnly: true },
 ]
 
 interface SidebarProps {
-  onAuthClick: () => void
   className?: string
   onNavigate?: () => void
   onClose?: () => void
@@ -47,7 +40,6 @@ interface SidebarProps {
 }
 
 export function Sidebar({
-  onAuthClick,
   className,
   onNavigate,
   onClose,
@@ -56,7 +48,8 @@ export function Sidebar({
   showCollapseToggle = false,
 }: SidebarProps) {
   const location = useLocation()
-  const { isAuthenticated, logout } = useAuthStore()
+  const navigate = useNavigate()
+  const { logout } = useAuthStore()
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
       const savedTheme = localStorage.getItem('theme')
@@ -80,12 +73,9 @@ export function Sidebar({
     }
   }
 
-  const handleAuthClick = () => {
-    if (isAuthenticated) {
-      logout()
-    } else {
-      onAuthClick()
-    }
+  const handleLogout = () => {
+    logout()
+    navigate('/', { replace: true })
     onNavigate?.()
   }
 
@@ -178,49 +168,12 @@ export function Sidebar({
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 px-2.5 py-2 space-y-5 overflow-y-auto scrollbar-thin">
-        <div className="space-y-0.5">
-          {!collapsed && (
-            <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest">
-              概览
-            </div>
-          )}
-          {navItems
-            .filter((item) => !item.adminOnly)
-            .map((item) => (
-              <NavLink key={item.href} item={item} />
-            ))}
+      <nav className="flex-1 px-2.5 py-3 overflow-y-auto scrollbar-thin">
+        <div className="space-y-1">
+          {navItems.map((item) => (
+            <NavLink key={item.href} item={item} />
+          ))}
         </div>
-
-        {isAuthenticated && (
-          <>
-            <div className="space-y-0.5">
-              {!collapsed && (
-                <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest">
-                  管理
-                </div>
-              )}
-              {navItems
-                .filter((item) => item.adminOnly && item.href !== '/database')
-                .map((item) => (
-                  <NavLink key={item.href} item={item} />
-                ))}
-            </div>
-
-            <div className="space-y-0.5">
-              {!collapsed && (
-                <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest">
-                  系统
-                </div>
-              )}
-              {navItems
-                .filter((item) => item.href === '/database')
-                .map((item) => (
-                  <NavLink key={item.href} item={item} />
-                ))}
-            </div>
-          </>
-        )}
       </nav>
 
       {/* Footer */}
@@ -250,7 +203,7 @@ export function Sidebar({
           </button>
 
           <a
-            href="https://github.com/dreamhunter2333/awsl-one-api"
+            href="https://github.com/Tokinx/awsl-one-api"
             target="_blank"
             rel="noopener noreferrer"
             title={collapsed ? "GitHub" : undefined}
@@ -266,30 +219,19 @@ export function Sidebar({
           </a>
         </div>
 
-        {/* Auth Button */}
+        {/* Logout Button */}
         <button
           type="button"
-          title={collapsed ? (isAuthenticated ? '退出登录' : '管理员登录') : undefined}
+          title={collapsed ? '退出登录' : undefined}
           className={cn(
             'flex items-center justify-center gap-2 w-full rounded-lg text-[13px] font-medium transition-all duration-150',
             collapsed ? 'h-9' : 'h-9 px-3',
-            isAuthenticated
-              ? 'bg-destructive/8 text-destructive hover:bg-destructive/15'
-              : 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/15'
+            'bg-destructive/8 text-destructive hover:bg-destructive/15'
           )}
-          onClick={handleAuthClick}
+          onClick={handleLogout}
         >
-          {isAuthenticated ? (
-            <>
-              <LogOut className="h-3.5 w-3.5" />
-              {!collapsed && <span>退出登录</span>}
-            </>
-          ) : (
-            <>
-              <LogIn className="h-3.5 w-3.5" />
-              {!collapsed && <span>管理员登录</span>}
-            </>
-          )}
+          <LogOut className="h-3.5 w-3.5" />
+          {!collapsed && <span>退出登录</span>}
         </button>
       </div>
     </aside>

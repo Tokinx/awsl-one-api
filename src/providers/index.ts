@@ -2,12 +2,18 @@ import { Context, Hono } from "hono"
 import { contentJson, fromHono, OpenAPIRoute } from 'chanfana';
 import { z } from "zod";
 
+import db from "../db"
 import { resolveRouteId } from "./shared/route-policy"
 import { resolveChannel } from "./shared/channel-resolver"
 import { getProvider } from "./shared/provider-registry"
 import { ModelsEndpoint } from "./models"
 
 export const api = fromHono(new Hono<HonoCustomType>())
+
+api.use("/v1/*", async (c, next) => {
+    await db.ensureReady(c);
+    await next();
+});
 
 class UnifiedProxyEndpoint extends OpenAPIRoute {
     schema = {

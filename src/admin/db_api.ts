@@ -15,8 +15,7 @@ export class DBInitializeEndpoint extends OpenAPIRoute {
     };
 
     async handle(c: Context<HonoCustomType>) {
-        await db.initialize(c);
-        await db.migrate(c);
+        await db.ensureReady(c);
         return {
             success: true,
             data: await db.getVersion(c)
