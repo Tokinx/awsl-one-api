@@ -566,7 +566,7 @@ export function Channels() {
     return (
       <PageContainer
         title="渠道管理"
-        description="配置 AI 服务提供商连接"
+        description="配置 AI 服务商接口，管理模型和负载均衡策略"
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
@@ -601,14 +601,14 @@ export function Channels() {
             </div>
           </div>
         ) : !data || data.length === 0 ? (
-          <Card className="border-dashed border-2">
+          <Card>
             <CardContent className="flex flex-col items-center justify-center py-16 px-4">
               <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
                 <LinkIcon className="h-7 w-7 text-primary" />
               </div>
               <h3 className="font-semibold text-lg mb-2">添加您的第一个渠道</h3>
               <p className="text-muted-foreground text-sm text-center max-w-sm mb-6">
-                渠道连接到 AI 服务提供商（如 OpenAI、Azure、Claude），用于代理和转发 API 请求。
+                连接到 AI 服务商（如 OpenAI、Azure、Claude），用于代理和转发 API 请求。
               </p>
               <Button onClick={handleAdd} size="lg">
                 <Plus className="h-4 w-4 mr-2" />

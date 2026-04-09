@@ -216,7 +216,7 @@ export function Pricing() {
             </div>
           </div>
         ) : pricingRows.length === 0 ? (
-          <div className="rounded-xl border border-dashed flex flex-col items-center justify-center py-16">
+          <div className="rounded-xl border bg-white shadow-sm flex flex-col items-center justify-center py-16">
             <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
               <DollarSign className="h-8 w-8 text-muted-foreground" />
             </div>

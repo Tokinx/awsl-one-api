@@ -4,14 +4,13 @@
 
 ## ✨ 特性
 
-- 🚀 **基于 Cloudflare Workers**：无服务器架构，全球边缘部署
-- 🔐 **多渠道支持**：支持 OpenAI、Azure OpenAI、Claude、OpenAI Responses、Azure OpenAI Responses
-- 🎫 **Token 管理**：完整的 API Token 生成、管理和配额控制
-- 📊 **使用量统计**：实时统计 API 使用量和费用
+- 🚀 **基于 Cloudflare Workers**：全球分布式网络、极低延、高性能
+- 🔐 **多渠道**：支持 OpenAI、Azure OpenAI、Claude 等多种 AI 服务商
+- 🎫 **负载均衡**：支持多KEY/渠道间分配请求，自动重试+自动轮换，确保高可用性
+- 📊 **用量统计**：Analytics Engine 实时统计，精确成本核算与日志回溯
 - 💰 **定价管理**：灵活的模型定价配置
 - 🎨 **Web 管理界面**：直观的 Web 界面进行配置管理
 - 🧪 **API 测试工具**：内置 API 测试功能，支持实时调试
-- 📚 **OpenAPI 文档**：自动生成的 API 文档
 
 ## 🏗️ 系统架构
 
@@ -26,7 +25,7 @@ flowchart LR
         D[(Cloudflare D1<br/>Database)]
     end
 
-    subgraph Providers["AI 服务提供商"]
+    subgraph Providers["AI 服务商"]
         C1[Azure OpenAI]
         C2[OpenAI]
     end
@@ -49,13 +48,13 @@ one-api-workers/
 │   │   ├── pricing_api.ts        # 定价管理 API
 │   │   ├── db_api.ts             # 数据库初始化 API
 │   │   └── index.ts              # 管理接口路由
-│   ├── providers/                # AI 服务提供商
+│   ├── providers/                # AI 服务商
 │   │   ├── azure-openai-proxy.ts # Azure OpenAI 代理
 │   │   ├── openai-proxy.ts       # OpenAI 代理
 │   │   ├── claude-proxy.ts       # Claude 代理
 │   │   ├── openai-responses-proxy.ts # OpenAI Responses 代理
 │   │   ├── azure-openai-responses-proxy.ts # Azure Responses 代理
-│   │   └── index.ts              # 提供商路由
+│   │   └── index.ts              # 渠道路由
 │   ├── db/                       # 数据库相关
 │   ├── model/                    # 数据模型
 │   ├── constants.ts              # 常量定义
@@ -273,7 +272,7 @@ curl https://your-domain.com/v1/responses \
 
 访问 `https://your-domain.com` 即可使用 Web 管理界面，功能包括：
 
-- **🔗 渠道管理**：添加、编辑、删除 AI 服务提供商渠道（支持 OpenAI、Azure OpenAI、Claude、OpenAI Responses、Azure Responses）
+- **🔗 渠道管理**：添加、编辑、删除 AI 服务商（支持 OpenAI、Azure OpenAI、Claude、OpenAI Responses、Azure Responses）
 - **🔑 API Token 管理**：生成、管理和监控 API Token 使用情况
 - **💰 定价配置**：灵活配置不同模型的定价策略
 - **🧪 API 测试工具**：内置 API 测试界面，支持实时调试和错误排查
@@ -289,7 +288,7 @@ curl https://your-domain.com/v1/responses \
 
 #### 渠道配置
 
-目前支持以下 AI 服务提供商：
+目前支持以下 AI 服务商：
 
 **OpenAI 配置**
 
@@ -368,7 +367,7 @@ curl https://your-domain.com/v1/responses \
 **配置字段说明**：
 
 - `name`: 渠道显示名称
-- `type`: 服务提供商类型（`openai`、`azure-openai`、`claude`、`openai-responses`、`azure-openai-responses`）
+- `type`: 服务商类型（`openai`、`azure-openai`、`claude`、`openai-responses`、`azure-openai-responses`）
 - `endpoint`: API 端点地址
 - `api_key`: API 密钥
 - `api_version`: API 版本（Azure OpenAI / Claude 可用；Azure Responses v1 请留空）

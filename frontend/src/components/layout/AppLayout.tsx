@@ -83,7 +83,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           </header>
         )}
 
-        <main className="flex-1 overflow-y-auto bg-background">
+        <main className="flex-1 overflow-y-auto bg-background gradient-mesh grid-pattern">
           <div className="mx-auto max-w-7xl w-full">
             {children}
           </div>

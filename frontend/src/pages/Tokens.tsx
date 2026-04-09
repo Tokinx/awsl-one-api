@@ -273,7 +273,7 @@ export function Tokens() {
             </div>
           </div>
         ) : !data || data.length === 0 ? (
-          <Card className="border-dashed border-2">
+          <Card className="">
             <CardContent className="flex flex-col items-center justify-center py-16 px-4">
               <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
                 <Key className="h-7 w-7 text-primary" />
