@@ -17,17 +17,23 @@ Modern React + Vite + TypeScript frontend for AWSL One API management platform.
 ## Development
 
 ```bash
-# Install dependencies
-pnpm install
+# From the repo root, install both backend and frontend dependencies
+bun install
 
-# Start development server
-pnpm dev
+# Start frontend + worker together from the repo root
+bun run dev
+
+# Open the app through the Worker entry
+# http://127.0.0.1:8788
+
+# Or start only the frontend from ./frontend
+cd frontend
+
+# Start only the frontend development server
+bun run dev
 
 # Build for production
-pnpm build
-
-# Preview production build
-pnpm preview
+bun run build
 ```
 
 ## Project Structure
@@ -49,7 +55,13 @@ src/
 
 ## Environment Variables
 
-No environment variables required. The frontend communicates with the backend API at the same domain.
+Root `bun run dev` uses Worker-first local development.
+The browser should access the Worker URL, while the Worker proxies frontend requests to the Vite dev server via repo-root `wrangler.local.jsonc`.
+
+No Vite `server.proxy` is required in this mode.
+You still need the Vite dev server running, because the Worker proxies page/module/HMR requests to it instead of serving built assets.
+
+If you open `http://127.0.0.1:5173` directly, set `VITE_API_BASE_URL=http://127.0.0.1:8788` yourself.
 
 ## Features
 
@@ -58,12 +70,11 @@ No environment variables required. The frontend communicates with the backend AP
 - **Channels**: Manage OpenAI, Azure OpenAI, and Claude channels
 - **Tokens**: Create and manage API tokens with quota limits
 - **Pricing**: Configure model pricing multipliers
-- **Database**: Initialize database tables
 
 ## Building
 
 ```bash
-pnpm build
+bun run build
 ```
 
-The built files will be in the `dist` directory.
+The built files will be emitted to `../public`.

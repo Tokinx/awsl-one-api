@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "one-api-workers",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-04-28",
+  "workers_dev": false,
+  "vars": {
+    "ADMIN_TOKEN": "CHANGE_ME",
+  },
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "one-api",
+      "database_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ]
+}

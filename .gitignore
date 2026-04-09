@@ -26,11 +26,10 @@ logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
 lerna-debug.log*
 
 # misc
 .DS_Store
-wrangler.toml
 public*/
 bun.lock
+*.local.jsonc

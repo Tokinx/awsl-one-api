@@ -6,6 +6,7 @@ type CloudflareBindings = {
     DB: D1Database;
     ASSETS: Fetcher;
     ADMIN_TOKEN: string;
+    FRONTEND_DEV_SERVER_URL?: string;
 }
 
 type HonoCustomType = {

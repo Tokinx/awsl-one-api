@@ -64,7 +64,8 @@ awsl-one-api/
 ├── public/                       # 静态文件
 │   └── index.html                # Web 管理界面
 ├── type.d.ts                     # 类型定义
-├── wrangler.toml                 # Cloudflare Workers 配置
+├── wrangler.jsonc                # 生产/部署配置
+├── wrangler.local.jsonc          # 本地开发配置
 └── package.json                  # 项目配置
 ```
 
@@ -74,59 +75,114 @@ awsl-one-api/
 
 ### 环境要求
 
-- Node.js 18+
-- pnpm
+- Bun 1.3+
 - Cloudflare Workers 账户
 
 ### 安装依赖
 
 ```bash
-pnpm install
+bun install
 ```
+
+仓库已配置为 Bun workspaces，根目录一次安装会同时安装 Worker 和 `frontend/` 的依赖。
 
 ### 配置环境
 
-1. 复制 `wrangler.toml.template` 为 `wrangler.toml` 并修改配置：
+1. 修改 `wrangler.jsonc`，用于生产部署：
 
-```toml
-name = "awsl-one-api"
-main = "src/index.ts"
-compatibility_date = "2025-04-28"
-routes = [
-    { pattern = "your-domain.com", custom_domain = true },
-]
-
-[vars]
-ADMIN_TOKEN = "your-secure-admin-token-here"
-
-[assets]
-directory = "public"
-binding = "ASSETS"
-run_worker_first = true
-
-[[d1_databases]]
-binding = "DB"
-database_name = "your-database-name"
-database_id = "your-database-id"
+```jsonc
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "awsl-one-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-04-28",
+  "workers_dev": false,
+  "vars": {
+    "ADMIN_TOKEN": "your-secure-admin-token-here"
+  },
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "your-database-name",
+      "database_id": "your-database-id"
+    }
+  ]
+}
 ```
 
-1. 创建 Cloudflare D1 数据库：
+2. 修改 `wrangler.local.jsonc`，用于本地开发：
+
+```jsonc
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "awsl-one-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-04-28",
+  "workers_dev": false,
+  "vars": {
+    "ADMIN_TOKEN": "your-local-admin-token",
+    "FRONTEND_DEV_SERVER_URL": "http://127.0.0.1:5173"
+  }
+}
+```
+
+3. 创建 Cloudflare D1 数据库：
 
 ```bash
 wrangler d1 create awsl-one-api
 ```
 
+4. 在 Cloudflare Dashboard 中手动绑定生产域名：
+
+1. 进入 `Workers & Pages`
+2. 选择当前 Worker
+3. 打开 `Settings > Domains & Routes`
+4. 选择 `Add > Custom Domain`
+5. 添加你的生产域名
+
+如果你选择在 Dashboard 管理生产域名，就不要再把 `routes` / `custom_domain` 写回 `wrangler.jsonc`，否则下次 `wrangler deploy` 会用配置文件覆盖 Dashboard 中的路由设置。
+
 ### 本地开发
 
 ```bash
-pnpm dev
+bun run dev
 ```
+
+执行后会同时启动：
+
+- 前端 Vite 开发服务器：`http://127.0.0.1:5173`（作为 Worker 的上游）
+- Cloudflare Worker 本地服务：`http://127.0.0.1:8788`（浏览器访问入口）
+
+Worker 会代理非 `/api/*`、`/v1/*` 的请求到本地 Vite dev server，因此本地联调时应访问 `http://127.0.0.1:8788`，而不是直接打开 `5173`。
+这里不需要再给前端配置 Vite `server.proxy`，但仍然需要同时启动 Vite dev server，因为 HMR 和未构建源码都是由它提供，Worker 只是统一入口。
+`bun run dev:worker` 会显式使用 `wrangler.local.jsonc`，并固定 `--host localhost`，避免本地开发被生产配置干扰。
+
+如果只想单独调试后端，可运行：
+
+```bash
+bun run dev:worker
+```
+
+如果只想单独启动前端，可运行：
+
+```bash
+bun run dev:web
+```
+
+此模式只启动 Vite dev server，适合做纯前端样式开发；如果需要直接从 `5173` 调 API，请自行设置 `VITE_API_BASE_URL=http://127.0.0.1:8788`。
 
 ### 部署到生产环境
 
 ```bash
-pnpm run deploy
+bun run deploy
 ```
+
+部署前会自动构建前端资源到 `public/`。
 
 <details>
 <summary><h2>📖 使用与配置</h2></summary>

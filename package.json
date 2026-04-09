@@ -1,9 +1,15 @@
 {
   "name": "awsl-ai-proxy",
+  "workspaces": [
+    "frontend"
+  ],
   "scripts": {
-    "dev": "npx wrangler dev",
-    "deploy": "npx wrangler deploy --minify",
-    "cf-typegen": "npx wrangler types --include-env=false"
+    "dev": "concurrently --kill-others-on-fail -n web,worker -c cyan,green \"bun run dev:web\" \"bun run dev:worker\"",
+    "dev:web": "bun run --filter frontend dev",
+    "dev:worker": "wrangler dev --config wrangler.local.jsonc --local --host localhost",
+    "build": "bun run --filter frontend build",
+    "deploy": "bun run build && wrangler deploy --config wrangler.jsonc --minify",
+    "cf-typegen": "wrangler types --config wrangler.jsonc --include-env=false"
   },
   "dependencies": {
     "chanfana": "^2.8.3",
@@ -11,8 +17,9 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "typescript": "^5.9.3",
     "wrangler": "^4.61.1"
   },
-  "packageManager": "pnpm@10.10.0+sha512.d615db246fe70f25dcfea6d8d73dee782ce23e2245e3c4f6f888249fb568149318637dca73c2c5c8ef2a4ca0d5657fb9567188bfab47f566d1ee6ce987815c39"
+  "packageManager": "bun@1.3.11"
 }
