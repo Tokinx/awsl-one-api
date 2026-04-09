@@ -181,7 +181,7 @@ export function Pricing() {
   return (
     <PageContainer
       title="定价管理"
-      description="配置模型使用成本倍率"
+      description="配置模型使用成本倍率，基础配额单位：1M tokens = $1.00"
       actions={
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
@@ -198,15 +198,6 @@ export function Pricing() {
         </div>
       }
     >
-      {/* Info */}
-      <div className="mb-4 px-4 py-3 rounded-lg bg-muted/50 text-sm text-muted-foreground flex items-start gap-2.5">
-        <Info className="h-4 w-4 mt-0.5 flex-shrink-0 text-primary" />
-        <span>
-          基础配额单位：<span className="font-mono text-foreground">1M tokens = $1.00</span>。
-          倍率表示相对成本，如输入倍率 30 = 每百万 token 消耗 $30 配额。`按次` 为固定扣费，同样使用该配额单位，例如 15000 = $0.015 / 次。
-        </span>
-      </div>
-
       {editMode === 'table' ? (
         isLoading ? (
           <div className="flex items-center justify-center py-20">
@@ -216,12 +207,12 @@ export function Pricing() {
             </div>
           </div>
         ) : pricingRows.length === 0 ? (
-          <div className="rounded-xl border bg-white shadow-sm flex flex-col items-center justify-center py-16">
-            <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
-              <DollarSign className="h-8 w-8 text-muted-foreground" />
+          <div className="rounded-xl border bg-card shadow-sm flex flex-col items-center justify-center py-16">
+            <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+              <DollarSign className="h-7 w-7 text-primary" />
             </div>
             <h3 className="font-semibold text-lg mb-1">暂无定价配置</h3>
-            <p className="text-muted-foreground text-sm mb-4">添加模型定价倍率</p>
+            <p className="text-muted-foreground text-sm text-center max-w-sm mb-6">可调整倍率控制输入/输出成本，或者设置按次扣费。</p>
             <Button onClick={addRow}>
               <Plus className="h-4 w-4 mr-1" />
               添加模型

@@ -814,7 +814,7 @@ export function Channels() {
                         />
                         <div>
                           <div className="text-sm font-medium">自动重试</div>
-                          <p className="text-xs text-muted-foreground">单个密钥遇可重试错误时，自动重试 x3</p>
+                          <p className="mt-1 text-xs text-muted-foreground">单个密钥遇可重试错误时，自动重试 x3</p>
                         </div>
                       </label>
                       <label className="flex items-start gap-3 p-4 rounded-lg border bg-muted/30 cursor-pointer">
@@ -825,7 +825,7 @@ export function Channels() {
                         />
                         <div>
                           <div className="text-sm font-medium">自动轮换</div>
-                          <p className="text-xs text-muted-foreground">单个密钥多次失败后，自动轮换密钥 x3</p>
+                          <p className="mt-1 text-xs text-muted-foreground">单个密钥多次失败后，自动轮换密钥 x3</p>
                         </div>
                       </label>
                     </div>
@@ -869,7 +869,7 @@ export function Channels() {
 
                   {modelEditorMode === 'visual' ? (
                     <div className="space-y-2">
-                      <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_56px] md:gap-2 px-3 text-xs font-medium text-muted-foreground">
+                      <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_56px] md:gap-2 text-xs font-medium text-muted-foreground">
                         <div>模型 ID</div>
                         <div>模型名称</div>
                         <div className="text-center">删除</div>
@@ -878,18 +878,18 @@ export function Channels() {
                         const canDelete = !isEmptyModelRow(row) || modelRows.length > 1
 
                         return (
-                          <div key={index} className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_56px] gap-2 p-3 bg-muted/40 rounded-lg">
+                          <div key={index} className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_56px] gap-2">
                             <Input
                               value={row.id}
                               onChange={(e) => updateModelRow(index, 'id', e.target.value)}
                               placeholder="模型ID，例如：gpt-4.1-mini"
-                              className="bg-background text-sm"
+                              className="text-sm"
                             />
                             <Input
                               value={row.name}
                               onChange={(e) => updateModelRow(index, 'name', e.target.value)}
                               placeholder="模型名称，默认等于模型ID"
-                              className="bg-background text-sm"
+                              className="text-sm"
                             />
                             <Button
                               type="button"
