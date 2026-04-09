@@ -1,13 +1,18 @@
-# One API on Workers
+<div align="center">
+<h1>One API on Workers</h1>
 
-一个基于 Cloudflare Workers 的 OpenAI API 代理服务，支持多渠道管理、Token 管理和使用量统计。
+一个基于 Cloudflare Workers 分布式、低延迟、高性能的 AI 统一网关，支持多渠道管理、负载均衡、用量统计和追踪。
+</div>
+<div align="right">
+本项目基于 <a href="https://github.com/dreamhunter2333/awsl-one-api" target="_blank">awsl-one-api</a>
+</div>
 
-## ✨ 特性
+## ✨ 功能特性
 
-- 🚀 **基于 Cloudflare Workers**：全球分布式网络、极低延、高性能
+- 🚀 **基于 Cloudflare Workers**：全球分布式网络、低延迟、高性能
 - 🔐 **多渠道**：支持 OpenAI、Azure OpenAI、Claude 等多种 AI 服务商
 - 🎫 **负载均衡**：支持多KEY/渠道间分配请求，自动重试+自动轮换，确保高可用性
-- 📊 **用量统计**：Analytics Engine 实时统计，精确成本核算与日志回溯
+- 📊 **用量统计<sup>*</sup>**：Analytics Engine 实时统计，精确成本核算与日志回溯
 - 💰 **定价管理**：灵活的模型定价配置
 - 🎨 **Web 管理界面**：直观的 Web 界面进行配置管理
 - 🧪 **API 测试工具**：内置 API 测试功能，支持实时调试
@@ -152,28 +157,8 @@ wrangler d1 create one-api-workers
 bun run dev
 ```
 
-执行后会同时启动：
-
-- 前端 Vite 开发服务器：`http://127.0.0.1:5173`（作为 Worker 的上游）
-- Cloudflare Worker 本地服务：`http://127.0.0.1:8788`（浏览器访问入口）
-
-Worker 会代理非 `/api/*`、`/v1/*` 的请求到本地 Vite dev server，因此本地联调时应访问 `http://127.0.0.1:8788`，而不是直接打开 `5173`。
-这里不需要再给前端配置 Vite `server.proxy`，但仍然需要同时启动 Vite dev server，因为 HMR 和未构建源码都是由它提供，Worker 只是统一入口。
-`bun run dev:worker` 会显式使用 `wrangler.local.jsonc`，并固定 `--host localhost`，避免本地开发被生产配置干扰。
-
-如果只想单独调试后端，可运行：
-
-```bash
-bun run dev:worker
-```
-
-如果只想单独启动前端，可运行：
-
-```bash
-bun run dev:web
-```
-
-此模式只启动 Vite dev server，适合做纯前端样式开发；如果需要直接从 `5173` 调 API，请自行设置 `VITE_API_BASE_URL=http://127.0.0.1:8788`。
+- 前端 Vite 开发服务器：`http://127.0.0.1:5173`
+- Cloudflare Worker 本地服务：`http://127.0.0.1:8788`（入口）
 
 ### 部署到生产环境
 
@@ -187,12 +172,6 @@ bun run deploy
 <summary><h2>📖 使用与配置</h2></summary>
 
 ### 使用指南
-
-#### 初始化数据库
-
-系统会在首次访问需要数据库的接口时自动创建缺失表结构并补齐版本信息，通常不再需要手动初始化。
-
-前端界面不再提供单独的数据库管理页。
 
 #### 渠道配置
 
@@ -429,6 +408,8 @@ curl https://your-domain.com/v1/responses \
 ## 📄 许可证
 
 MIT License
+
+鸣谢：<a href="https://github.com/dreamhunter2333/awsl-one-api" target="_blank">awsl-one-api</a>
 
 ## 🙋‍♂️ 支持
 

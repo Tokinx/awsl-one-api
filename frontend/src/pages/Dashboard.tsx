@@ -32,7 +32,7 @@ const features = [
   {
     icon: Shield,
     title: "安全管理",
-    description: "基于令牌的访问控制与独立 API 密钥分配。",
+    description: "基于安全令牌的访问控制与独立 API 密钥分配。",
     gradient: "from-violet-500/10 to-purple-500/10",
     iconBg: "from-violet-500 to-purple-500",
     delay: "150ms",
