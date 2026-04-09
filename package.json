@@ -11,6 +11,14 @@
     "deploy": "bun run build && wrangler deploy --config wrangler.jsonc --minify",
     "cf-typegen": "wrangler types --config wrangler.jsonc --include-env=false"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tokinx/one-api-workers.git"
+  },
+  "homepage": "https://github.com/Tokinx/one-api-workers",
+  "bugs": {
+    "url": "https://github.com/Tokinx/one-api-workers/issues"
+  },
   "dependencies": {
     "chanfana": "^2.8.3",
     "hono": "^4.12.8",
