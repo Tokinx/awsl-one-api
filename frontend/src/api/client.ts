@@ -161,6 +161,12 @@ export const apiClient = {
       body: JSON.stringify(config),
     }),
 
+  fetchChannelModels: (config: unknown) =>
+    request<ApiResponse>('/api/admin/channel/models/fetch', {
+      method: 'POST',
+      body: JSON.stringify(config),
+    }),
+
   deleteChannel: (key: string) =>
     request(`/api/admin/channel/${encodeURIComponent(key)}`, { method: 'DELETE' }),
 

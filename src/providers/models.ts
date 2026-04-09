@@ -2,7 +2,7 @@ import { Context } from "hono";
 import { OpenAPIRoute } from "chanfana";
 import { z } from "zod";
 import { getApiKeyFromHeaders, fetchTokenData, fetchChannelsForToken } from "./shared/auth";
-import { getSupportedModels } from "../utils";
+import { getChannelModels } from "../utils";
 import { normalizeChannelConfig } from "../channel-config";
 
 export class ModelsEndpoint extends OpenAPIRoute {
@@ -59,8 +59,8 @@ export class ModelsEndpoint extends OpenAPIRoute {
 
         for (const row of channelsResult.results) {
             const config = normalizeChannelConfig(JSON.parse(row.value) as ChannelConfig);
-            for (const modelName of getSupportedModels(config)) {
-                modelsSet.add(modelName);
+            for (const model of getChannelModels(config)) {
+                modelsSet.add(model.name);
             }
         }
 

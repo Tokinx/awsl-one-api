@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '@/api/client'
-import { Channel, ChannelConfig } from '@/types'
+import { Channel, ChannelConfig, ChannelModelMapping } from '@/types'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,13 +23,14 @@ import {
   Check,
   MoreHorizontal,
   Search,
-  ArrowRight,
   Globe,
   Cpu,
 } from 'lucide-react'
 import { PageContainer } from '@/components/ui/page-container'
 
 type EditMode = 'form' | 'json'
+type ModelEditorMode = 'visual' | 'json'
+type ModelRow = { id: string; name: string }
 
 const channelTypes = [
   { value: 'azure-openai', label: 'Azure OpenAI' },
@@ -42,6 +43,11 @@ const channelTypes = [
   { value: 'azure-openai-responses', label: 'Azure OpenAI Responses' },
 ]
 
+const createEmptyModelRow = (): ModelRow => ({
+  id: '',
+  name: '',
+})
+
 const createDefaultChannelFormData = (): ChannelConfig => ({
   name: '',
   type: 'azure-openai',
@@ -49,8 +55,7 @@ const createDefaultChannelFormData = (): ChannelConfig => ({
   api_keys: [],
   auto_retry: true,
   auto_rotate: true,
-  supported_models: [],
-  deployment_mapper: {},
+  models: [],
 })
 
 const parseApiKeys = (value: string): string[] => {
@@ -73,10 +78,72 @@ const formatApiKeys = (apiKeys?: string[]): string => {
   return (apiKeys || []).join('\n')
 }
 
+const normalizeModels = (models?: ChannelModelMapping[]): ChannelModelMapping[] => {
+  if (!Array.isArray(models)) {
+    return []
+  }
+
+  return models
+    .map((model) => ({
+      id: typeof model?.id === 'string' ? model.id.trim() : '',
+      name: typeof model?.name === 'string' ? model.name.trim() : '',
+    }))
+    .filter((model) => model.id.length > 0)
+    .map((model) => ({
+      id: model.id,
+      name: model.name || model.id,
+    }))
+}
+
+const getChannelModels = (config: ChannelConfig): ChannelModelMapping[] => {
+  const normalizedModels = normalizeModels(config.models)
+  if (normalizedModels.length > 0) {
+    return normalizedModels
+  }
+
+  const deploymentMapper = config.deployment_mapper || {}
+  const supportedModels = Array.isArray(config.supported_models) ? config.supported_models : []
+  const legacyModels: ChannelModelMapping[] = []
+  const seenNames = new Set<string>()
+
+  const pushModel = (id: string, name?: string) => {
+    const normalizedId = id.trim()
+    const normalizedName = (name || id).trim()
+
+    if (!normalizedId || !normalizedName || seenNames.has(normalizedName)) {
+      return
+    }
+
+    seenNames.add(normalizedName)
+    legacyModels.push({
+      id: normalizedId,
+      name: normalizedName,
+    })
+  }
+
+  supportedModels.forEach((modelName) => {
+    const normalizedName = typeof modelName === 'string' ? modelName.trim() : ''
+    if (!normalizedName) {
+      return
+    }
+    pushModel(deploymentMapper[normalizedName] || normalizedName, normalizedName)
+  })
+
+  Object.entries(deploymentMapper).forEach(([modelName, modelId]) => {
+    if (typeof modelId !== 'string') {
+      return
+    }
+    pushModel(modelId, modelName)
+  })
+
+  return legacyModels
+}
+
 const normalizeChannelFormConfig = (config: ChannelConfig): ChannelConfig => {
   const legacyApiKey = typeof config.api_key === 'string' ? config.api_key.trim() : ''
   const rawApiKeys = Array.isArray(config.api_keys) ? config.api_keys : []
   const mergedKeys = parseApiKeys([legacyApiKey, ...rawApiKeys].join('\n'))
+  const models = getChannelModels(config)
 
   return {
     ...config,
@@ -84,26 +151,148 @@ const normalizeChannelFormConfig = (config: ChannelConfig): ChannelConfig => {
     api_keys: mergedKeys,
     auto_retry: config.auto_retry ?? true,
     auto_rotate: config.auto_rotate ?? true,
-    supported_models: Array.isArray(config.supported_models) ? config.supported_models : [],
-    deployment_mapper: config.deployment_mapper || {},
+    models,
+    supported_models: undefined,
+    deployment_mapper: undefined,
   }
+}
+
+const isEmptyModelRow = (row: ModelRow): boolean => {
+  return !row.id.trim() && !row.name.trim()
+}
+
+const ensureTrailingEmptyModelRow = (rows: ModelRow[]): ModelRow[] => {
+  const meaningfulRows = rows.filter((row) => !isEmptyModelRow(row))
+  return [...meaningfulRows, createEmptyModelRow()]
+}
+
+const buildRowsFromModels = (models: ChannelModelMapping[]): ModelRow[] => {
+  return ensureTrailingEmptyModelRow(models.map((model) => ({ id: model.id, name: model.name })))
+}
+
+const serializeModels = (models: ChannelModelMapping[]): string => {
+  return JSON.stringify(models, null, 2)
+}
+
+const validateModels = (models: ChannelModelMapping[]): string | null => {
+  if (models.length === 0) {
+    return '请至少配置一个模型'
+  }
+
+  const names = new Set<string>()
+  for (const model of models) {
+    if (names.has(model.name)) {
+      return `模型名称重复：${model.name}`
+    }
+    names.add(model.name)
+  }
+
+  return null
+}
+
+const parseModelsFromRows = (rows: ModelRow[]): { models: ChannelModelMapping[]; error?: string } => {
+  const activeRows = rows.filter((row) => !isEmptyModelRow(row))
+
+  for (const row of activeRows) {
+    if (!row.id.trim()) {
+      return { models: [], error: '模型 ID 不能为空' }
+    }
+  }
+
+  const models = activeRows.map((row) => {
+    const id = row.id.trim()
+    const name = row.name.trim() || id
+    return { id, name }
+  })
+
+  const validationError = validateModels(models)
+  if (validationError) {
+    return { models: [], error: validationError }
+  }
+
+  return { models }
+}
+
+const parseModelsFromJson = (value: string): { models: ChannelModelMapping[]; error?: string } => {
+  let parsed: unknown
+
+  try {
+    parsed = JSON.parse(value)
+  } catch {
+    return { models: [], error: '模型 JSON 格式错误' }
+  }
+
+  if (!Array.isArray(parsed)) {
+    return { models: [], error: '模型 JSON 必须是数组' }
+  }
+
+  const models: ChannelModelMapping[] = []
+
+  for (const item of parsed) {
+    if (!item || typeof item !== 'object') {
+      return { models: [], error: '模型 JSON 项必须是对象' }
+    }
+
+    const id = typeof (item as ChannelModelMapping).id === 'string' ? (item as ChannelModelMapping).id.trim() : ''
+    const rawName = typeof (item as ChannelModelMapping).name === 'string' ? (item as ChannelModelMapping).name.trim() : ''
+
+    if (!id) {
+      return { models: [], error: '模型 JSON 中的 id 不能为空' }
+    }
+
+    models.push({
+      id,
+      name: rawName || id,
+    })
+  }
+
+  const validationError = validateModels(models)
+  if (validationError) {
+    return { models: [], error: validationError }
+  }
+
+  return { models }
 }
 
 export function Channels() {
   const [view, setView] = useState<'list' | 'form'>('list')
   const [editMode, setEditMode] = useState<EditMode>('form')
+  const [modelEditorMode, setModelEditorMode] = useState<ModelEditorMode>('visual')
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [formData, setFormData] = useState<ChannelConfig>(createDefaultChannelFormData())
   const [channelKey, setChannelKey] = useState('')
   const [jsonValue, setJsonValue] = useState('')
   const [apiKeysInput, setApiKeysInput] = useState('')
-  const [supportedModelRows, setSupportedModelRows] = useState<Array<{ model: string }>>([])
-  const [mapperRows, setMapperRows] = useState<Array<{ request: string; deployment: string }>>([])
+  const [modelRows, setModelRows] = useState<ModelRow[]>([createEmptyModelRow()])
+  const [modelJsonValue, setModelJsonValue] = useState('[]')
   const [searchQuery, setSearchQuery] = useState('')
   const [openMenu, setOpenMenu] = useState<string | null>(null)
 
   const { addToast } = useToast()
   const queryClient = useQueryClient()
+
+  const applyModels = (models: ChannelModelMapping[]) => {
+    const normalizedModels = normalizeModels(models)
+    setFormData((prev) => ({ ...prev, models: normalizedModels }))
+    setModelRows(buildRowsFromModels(normalizedModels))
+    setModelJsonValue(serializeModels(normalizedModels))
+  }
+
+  const resolveCurrentModels = (): { models: ChannelModelMapping[]; error?: string } => {
+    return modelEditorMode === 'visual'
+      ? parseModelsFromRows(modelRows)
+      : parseModelsFromJson(modelJsonValue)
+  }
+
+  const loadFormConfig = (config: ChannelConfig) => {
+    const normalizedConfig = normalizeChannelFormConfig(config)
+    setFormData(normalizedConfig)
+    setApiKeysInput(formatApiKeys(normalizedConfig.api_keys))
+    setModelRows(buildRowsFromModels(normalizedConfig.models || []))
+    setModelJsonValue(serializeModels(normalizedConfig.models || []))
+    setModelEditorMode('visual')
+    return normalizedConfig
+  }
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['channels'],
@@ -120,7 +309,7 @@ export function Channels() {
   }, [])
 
   const saveMutation = useMutation({
-    mutationFn: async ({ key, config }: { key: string; config: any }) => {
+    mutationFn: async ({ key, config }: { key: string; config: ChannelConfig }) => {
       return apiClient.saveChannel(key, config)
     },
     onSuccess: () => {
@@ -129,7 +318,7 @@ export function Channels() {
       resetForm()
       setView('list')
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       addToast('保存失败：' + error.message, 'error')
     },
   })
@@ -142,8 +331,25 @@ export function Channels() {
       queryClient.invalidateQueries({ queryKey: ['channels'] })
       addToast('渠道已删除', 'success')
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       addToast('删除失败：' + error.message, 'error')
+    },
+  })
+
+  const fetchModelsMutation = useMutation({
+    mutationFn: async (config: ChannelConfig) => {
+      return apiClient.fetchChannelModels(config)
+    },
+    onSuccess: (response) => {
+      const fetchedModels = ((response.data as ChannelModelMapping[]) || []).map((model) => ({
+        id: model.id,
+        name: model.id,
+      }))
+      applyModels(fetchedModels)
+      addToast(`已获取 ${fetchedModels.length} 个模型`, 'success')
+    },
+    onError: (error: Error) => {
+      addToast('获取模型失败：' + error.message, 'error')
     },
   })
 
@@ -152,8 +358,9 @@ export function Channels() {
     setChannelKey('')
     setJsonValue('')
     setApiKeysInput('')
-    setSupportedModelRows([])
-    setMapperRows([])
+    setModelRows([createEmptyModelRow()])
+    setModelJsonValue('[]')
+    setModelEditorMode('visual')
     setEditingKey(null)
     setEditMode('form')
   }
@@ -167,23 +374,31 @@ export function Channels() {
     setEditingKey(channel.key)
     setChannelKey(channel.key)
     const rawConfig = typeof channel.value === 'string' ? JSON.parse(channel.value) : channel.value
-    const config = normalizeChannelFormConfig(rawConfig)
-    setFormData(config)
-    setJsonValue(JSON.stringify(config, null, 2))
-    setApiKeysInput(formatApiKeys(config.api_keys))
-    setSupportedModelRows((config.supported_models || []).map((model) => ({ model })))
-    const rows = Object.entries(config.deployment_mapper || {}).map(([request, deployment]) => ({
-      request,
-      deployment: deployment as string,
-    }))
-    setMapperRows(rows)
+    const normalizedConfig = loadFormConfig(rawConfig)
+    setJsonValue(JSON.stringify(normalizedConfig, null, 2))
     setView('form')
   }
 
   const handleDelete = (key: string) => {
-    if (confirm(`确定要删除此渠道吗？`)) {
+    if (confirm('确定要删除此渠道吗？')) {
       deleteMutation.mutate(key)
     }
+  }
+
+  const handleFetchModels = () => {
+    const apiKeys = parseApiKeys(apiKeysInput)
+
+    if (!formData.type || !formData.endpoint || apiKeys.length === 0) {
+      addToast('请先填写渠道类型、API 端点和 API 密钥', 'error')
+      return
+    }
+
+    const config = normalizeChannelFormConfig({
+      ...formData,
+      api_keys: apiKeys,
+    })
+
+    fetchModelsMutation.mutate(config)
   }
 
   const handleSave = () => {
@@ -192,50 +407,38 @@ export function Channels() {
       return
     }
 
-    const buildFormConfig = () => {
-      const deployment_mapper: Record<string, string> = {}
-      mapperRows.forEach((row) => {
-        if (row.request && row.deployment) {
-          deployment_mapper[row.request] = row.deployment
-        }
-      })
+    const apiKeys = parseApiKeys(apiKeysInput)
+    const modelResult = resolveCurrentModels()
 
-      const supported_models = supportedModelRows
-        .map((row) => row.model.trim())
-        .filter((model) => model.length > 0)
-
-      return normalizeChannelFormConfig({
-        ...formData,
-        api_key: undefined,
-        api_keys: parseApiKeys(apiKeysInput),
-        supported_models,
-        deployment_mapper,
-      })
+    if (modelResult.error) {
+      addToast(modelResult.error, 'error')
+      return
     }
 
-    let config: any
+    if (!formData.name || !formData.endpoint || apiKeys.length === 0) {
+      addToast('请填写所有必填字段', 'error')
+      return
+    }
+
+    let config: ChannelConfig
     if (editMode === 'form') {
-      const apiKeys = parseApiKeys(apiKeysInput)
-      const supportedModels = supportedModelRows
-        .map((row) => row.model.trim())
-        .filter((model) => model.length > 0)
-
-      if (!formData.name || !formData.endpoint || apiKeys.length === 0) {
-        addToast('请填写所有必填字段', 'error')
-        return
-      }
-
-      if (supportedModels.length === 0) {
-        addToast('请至少填写一个支持模型', 'error')
-        return
-      }
-
-      config = buildFormConfig()
+      config = normalizeChannelFormConfig({
+        ...formData,
+        api_key: undefined,
+        api_keys: apiKeys,
+        models: modelResult.models,
+      })
     } else {
       try {
         config = normalizeChannelFormConfig(JSON.parse(jsonValue))
       } catch {
-        addToast('JSON格式错误', 'error')
+        addToast('JSON 格式错误', 'error')
+        return
+      }
+
+      const validationError = validateModels(config.models || [])
+      if (validationError) {
+        addToast(validationError, 'error')
         return
       }
     }
@@ -245,84 +448,120 @@ export function Channels() {
 
   const toggleEditMode = () => {
     if (editMode === 'form') {
-      const deployment_mapper: Record<string, string> = {}
-      mapperRows.forEach((row) => {
-        if (row.request && row.deployment) {
-          deployment_mapper[row.request] = row.deployment
-        }
-      })
-      const supported_models = supportedModelRows
-        .map((row) => row.model.trim())
-        .filter((model) => model.length > 0)
+      const modelResult = resolveCurrentModels()
+      if (modelResult.error) {
+        addToast(modelResult.error, 'error')
+        return
+      }
+
       const config = normalizeChannelFormConfig({
         ...formData,
         api_key: undefined,
         api_keys: parseApiKeys(apiKeysInput),
-        supported_models,
-        deployment_mapper,
+        models: modelResult.models,
       })
       setJsonValue(JSON.stringify(config, null, 2))
       setEditMode('json')
-    } else {
-      try {
-        const config = normalizeChannelFormConfig(JSON.parse(jsonValue))
-        setFormData(config)
-        setApiKeysInput(formatApiKeys(config.api_keys))
-        setSupportedModelRows((config.supported_models || []).map((model: string) => ({ model })))
-        const rows = Object.entries(config.deployment_mapper || {}).map(([request, deployment]) => ({
-          request,
-          deployment: deployment as string,
-        }))
-        setMapperRows(rows)
-        setEditMode('form')
-      } catch {
-        addToast('JSON格式错误', 'error')
+      return
+    }
+
+    try {
+      const config = normalizeChannelFormConfig(JSON.parse(jsonValue))
+      const validationError = validateModels(config.models || [])
+      if (validationError) {
+        addToast(validationError, 'error')
+        return
       }
+
+      loadFormConfig(config)
+      setEditMode('form')
+    } catch {
+      addToast('JSON 格式错误', 'error')
     }
   }
 
-  const addMapperRow = () => {
-    setMapperRows([...mapperRows, { request: '', deployment: '' }])
+  const toggleModelEditorMode = () => {
+    if (modelEditorMode === 'visual') {
+      const result = parseModelsFromRows(modelRows)
+      if (result.error) {
+        addToast(result.error, 'error')
+        return
+      }
+
+      setModelJsonValue(serializeModels(result.models))
+      setModelEditorMode('json')
+      return
+    }
+
+    const result = parseModelsFromJson(modelJsonValue)
+    if (result.error) {
+      addToast(result.error, 'error')
+      return
+    }
+
+    applyModels(result.models)
+    setModelEditorMode('visual')
   }
 
-  const addSupportedModelRow = () => {
-    setSupportedModelRows([...supportedModelRows, { model: '' }])
+  const setModelEditorModeWithSync = (nextMode: ModelEditorMode) => {
+    if (nextMode === modelEditorMode) {
+      return
+    }
+
+    toggleModelEditorMode()
   }
 
-  const removeSupportedModelRow = (index: number) => {
-    setSupportedModelRows(supportedModelRows.filter((_, i) => i !== index))
+  const updateModelRowsState = (nextRows: ModelRow[]) => {
+    const normalizedRows = ensureTrailingEmptyModelRow(nextRows)
+    setModelRows(normalizedRows)
+    const result = parseModelsFromRows(normalizedRows)
+    if (!result.error) {
+      setFormData((prev) => ({ ...prev, models: result.models }))
+      setModelJsonValue(serializeModels(result.models))
+    }
   }
 
-  const updateSupportedModelRow = (index: number, value: string) => {
-    const newRows = [...supportedModelRows]
-    newRows[index].model = value
-    setSupportedModelRows(newRows)
+  const updateModelRow = (index: number, field: keyof ModelRow, value: string) => {
+    const nextRows = [...modelRows]
+    const previousRow = nextRows[index] || createEmptyModelRow()
+    const nextRow = {
+      ...previousRow,
+      [field]: value,
+    }
+
+    if (field === 'id' && (!previousRow.name.trim() || previousRow.name.trim() === previousRow.id.trim())) {
+      nextRow.name = value
+    }
+
+    nextRows[index] = nextRow
+    updateModelRowsState(nextRows)
   }
 
-  const removeMapperRow = (index: number) => {
-    setMapperRows(mapperRows.filter((_, i) => i !== index))
-  }
+  const removeModelRow = (index: number) => {
+    const meaningfulRows = modelRows.filter((row) => !isEmptyModelRow(row))
+    if (meaningfulRows.length === 0) {
+      updateModelRowsState([createEmptyModelRow()])
+      return
+    }
 
-  const updateMapperRow = (index: number, field: 'request' | 'deployment', value: string) => {
-    const newRows = [...mapperRows]
-    newRows[index][field] = value
-    setMapperRows(newRows)
+    const nextRows = modelRows.filter((_, rowIndex) => rowIndex !== index)
+    updateModelRowsState(nextRows)
   }
 
   const getTypeLabel = (type: string) => {
-    return channelTypes.find((t) => t.value === type)?.label || type
+    return channelTypes.find((item) => item.value === type)?.label || type
   }
 
   const filteredData = data?.filter((channel) => {
     if (!searchQuery) return true
-    const config = typeof channel.value === 'string' ? JSON.parse(channel.value) : channel.value
+    const rawConfig = typeof channel.value === 'string' ? JSON.parse(channel.value) : channel.value
+    const config = normalizeChannelFormConfig(rawConfig)
     return (
       config.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       channel.key.toLowerCase().includes(searchQuery.toLowerCase())
     )
   })
 
-  // List View
   if (view === 'list') {
     return (
       <PageContainer
@@ -331,7 +570,7 @@ export function Channels() {
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-              <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
+              <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
             </Button>
             <Button size="sm" onClick={handleAdd}>
               <Plus className="h-4 w-4" />
@@ -340,7 +579,6 @@ export function Channels() {
           </div>
         }
       >
-        {/* Search */}
         {data && data.length > 0 && (
           <div className="mb-4">
             <div className="relative max-w-sm">
@@ -382,16 +620,13 @@ export function Channels() {
           <Card>
             <div className="divide-y">
               {filteredData?.map((channel) => {
-                const config = typeof channel.value === 'string' ? JSON.parse(channel.value) : channel.value
-                const modelCount = (config.supported_models || []).length
+                const rawConfig = typeof channel.value === 'string' ? JSON.parse(channel.value) : channel.value
+                const config = normalizeChannelFormConfig(rawConfig)
+                const modelCount = (config.models || []).length
                 const isMenuOpen = openMenu === channel.key
 
                 return (
-                  <div
-                    key={channel.key}
-                    className="p-4 hover:bg-muted/30 transition-colors"
-                  >
-                    {/* Mobile Layout */}
+                  <div key={channel.key} className="p-4 hover:bg-muted/30 transition-colors">
                     <div className="md:hidden space-y-3">
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
@@ -434,13 +669,10 @@ export function Channels() {
                         <span className="px-2 py-0.5 rounded bg-muted text-muted-foreground text-xs">
                           {getTypeLabel(config.type)}
                         </span>
-                        <span className="text-muted-foreground">
-                          {modelCount} 个模型
-                        </span>
+                        <span className="text-muted-foreground">{modelCount} 个模型</span>
                       </div>
                     </div>
 
-                    {/* Desktop Layout */}
                     <div className="hidden md:flex md:items-center md:gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="font-medium">{config.name}</div>
@@ -470,9 +702,7 @@ export function Channels() {
                 )
               })}
               {filteredData?.length === 0 && searchQuery && (
-                <div className="p-8 text-center text-muted-foreground">
-                  未找到匹配的渠道
-                </div>
+                <div className="p-8 text-center text-muted-foreground">未找到匹配的渠道</div>
               )}
             </div>
           </Card>
@@ -481,11 +711,9 @@ export function Channels() {
     )
   }
 
-  // Form View
   return (
     <div className="p-4 md:p-6 lg:p-8 animate-in">
-      <div className="max-w-2xl mx-auto">
-        {/* Header */}
+      <div className="max-w-4xl mx-auto">
         <div className="mb-6">
           <Button variant="ghost" size="sm" className="mb-3 -ml-2 text-muted-foreground" onClick={() => setView('list')}>
             <ArrowLeft className="h-4 w-4 mr-1" />
@@ -501,257 +729,230 @@ export function Channels() {
         </div>
 
         <div className="space-y-6">
-        {/* Channel Key */}
-        <Card>
-          <CardContent className="p-5">
-            <h3 className="font-medium mb-4">渠道标识</h3>
-            <p className="text-sm text-muted-foreground mb-3">用于内部识别的唯一标识</p>
-            <Input
-              value={channelKey}
-              onChange={(e) => setChannelKey(e.target.value)}
-              placeholder="例如：azure-gpt4-east"
-              disabled={!!editingKey}
-              className="font-mono text-sm"
-            />
-          </CardContent>
-        </Card>
-
-        {editMode === 'form' ? (
-          <>
-            {/* Basic Info */}
-            <Card>
-              <CardContent className="p-5">
-                <h3 className="font-medium mb-4">基本信息</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-sm">渠道名称 <span className="text-destructive">*</span></Label>
-                    <Input
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="例如：Azure GPT-4 东部"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm">渠道类型 <span className="text-destructive">*</span></Label>
-                    <Select
-                      value={formData.type}
-                      onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
-                    >
-                      {channelTypes.map((type) => (
-                        <option key={type.value} value={type.value}>
-                          {type.label}
-                        </option>
-                      ))}
-                    </Select>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Connection */}
-            <Card>
-              <CardContent className="p-5">
-                <h3 className="font-medium mb-4">连接配置</h3>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label className="text-sm flex items-center gap-2">
-                      <Globe className="h-4 w-4 text-muted-foreground" />
-                      API 端点 <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                      value={formData.endpoint}
-                      onChange={(e) => setFormData({ ...formData, endpoint: e.target.value })}
-                      placeholder="https://your-resource.openai.azure.com/"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm">API 密钥 <span className="text-destructive">*</span></Label>
-                    <Textarea
-                      value={apiKeysInput}
-                      onChange={(e) => {
-                        setApiKeysInput(e.target.value)
-                        setFormData({ ...formData, api_keys: parseApiKeys(e.target.value) })
-                      }}
-                      placeholder={'sk-xxx\nsk-yyy'}
-                      rows={5}
-                      className="font-mono text-sm"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      可配置多个密钥，每行一个，请求会随机选取一个密钥发起调用。
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <label className="flex items-start gap-3 p-4 rounded-lg border bg-muted/30 cursor-pointer">
-                      <Checkbox
-                        className="mt-0.5"
-                        checked={formData.auto_retry ?? true}
-                        onCheckedChange={(checked) => setFormData({ ...formData, auto_retry: checked })}
-                      />
-                      <div>
-                        <div className="text-sm font-medium">自动重试</div>
-                        <p className="text-xs text-muted-foreground">单个密钥遇可重试错误时，自动重试 x3</p>
-                      </div>
-                    </label>
-                    <label className="flex items-start gap-3 p-4 rounded-lg border bg-muted/30 cursor-pointer">
-                      <Checkbox
-                        className="mt-0.5"
-                        checked={formData.auto_rotate ?? true}
-                        onCheckedChange={(checked) => setFormData({ ...formData, auto_rotate: checked })}
-                      />
-                      <div>
-                        <div className="text-sm font-medium">自动轮换</div>
-                        <p className="text-xs text-muted-foreground">单个密钥多次失败后，自动轮换密钥 x3</p>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="font-medium flex items-center gap-2">
-                      <Cpu className="h-4 w-4 text-muted-foreground" />
-                      支持模型
-                    </h3>
-                    <p className="text-sm text-muted-foreground">用于声明这个渠道接受哪些请求模型名，可填写精确值或通配符</p>
-                  </div>
-                  <Button type="button" variant="outline" size="sm" onClick={addSupportedModelRow}>
-                    <Plus className="h-4 w-4 mr-1" />
-                    添加
-                  </Button>
-                </div>
-
-                {supportedModelRows.length === 0 ? (
-                  <button
-                    type="button"
-                    onClick={addSupportedModelRow}
-                    className="w-full py-8 border-2 border-dashed rounded-xl text-sm text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors flex flex-col items-center justify-center gap-2"
-                  >
-                    <Plus className="h-5 w-5" />
-                    添加支持模型
-                  </button>
-                ) : (
-                  <div className="space-y-2">
-                    {supportedModelRows.map((row, index) => (
-                      <div key={index} className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
-                        <Input
-                          value={row.model}
-                          onChange={(e) => updateSupportedModelRow(index, e.target.value)}
-                          placeholder="gpt-4o-mini-tts 或 gpt-*"
-                          className="flex-1 bg-background text-sm"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-9 w-9 text-destructive hover:text-destructive flex-shrink-0"
-                          onClick={() => removeSupportedModelRow(index)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Model Mappings */}
-            <Card>
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="font-medium flex items-center gap-2">
-                      <Cpu className="h-4 w-4 text-muted-foreground" />
-                      模型映射
-                    </h3>
-                    <p className="text-sm text-muted-foreground">可选。将请求模型名映射到实际上游 deployment；未填写时默认使用同名</p>
-                  </div>
-                  <Button type="button" variant="outline" size="sm" onClick={addMapperRow}>
-                    <Plus className="h-4 w-4 mr-1" />
-                    添加
-                  </Button>
-                </div>
-
-                {mapperRows.length === 0 ? (
-                  <button
-                    type="button"
-                    onClick={addMapperRow}
-                    className="w-full py-8 border-2 border-dashed rounded-xl text-sm text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors flex flex-col items-center justify-center gap-2"
-                  >
-                    <Plus className="h-5 w-5" />
-                    添加模型映射
-                  </button>
-                ) : (
-                  <div className="space-y-2">
-                    {mapperRows.map((row, index) => (
-                      <div key={index} className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
-                        <Input
-                          value={row.request}
-                          onChange={(e) => updateMapperRow(index, 'request', e.target.value)}
-                          placeholder="gpt-4"
-                          className="flex-1 bg-background text-sm"
-                        />
-                        <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                        <Input
-                          value={row.deployment}
-                          onChange={(e) => updateMapperRow(index, 'deployment', e.target.value)}
-                          placeholder="gpt-4-0613"
-                          className="flex-1 bg-background text-sm"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-9 w-9 text-destructive hover:text-destructive flex-shrink-0"
-                          onClick={() => removeMapperRow(index)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </>
-        ) : (
           <Card>
             <CardContent className="p-5">
-              <h3 className="font-medium mb-4">JSON 配置</h3>
-              <Textarea
-                value={jsonValue}
-                onChange={(e) => setJsonValue(e.target.value)}
-                rows={18}
+              <h3 className="font-medium mb-4">渠道标识</h3>
+              <p className="text-sm text-muted-foreground mb-3">用于内部识别的唯一标识</p>
+              <Input
+                value={channelKey}
+                onChange={(e) => setChannelKey(e.target.value)}
+                placeholder="例如：azure-gpt4-east"
+                disabled={!!editingKey}
                 className="font-mono text-sm"
-                placeholder='{"name":"Azure OpenAI","type":"azure-openai","endpoint":"https://example.openai.azure.com/","api_keys":["sk-1","sk-2"],"auto_retry":true,"auto_rotate":true}'
               />
             </CardContent>
           </Card>
-        )}
 
-        {/* Actions */}
-        <div className="flex items-center justify-end gap-3 pt-2">
-          <Button variant="outline" onClick={() => setView('list')}>
-            取消
-          </Button>
-          <Button onClick={handleSave} disabled={saveMutation.isPending}>
-            {saveMutation.isPending ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                保存中...
-              </>
-            ) : (
-              <>
-                <Check className="h-4 w-4 mr-2" />
-                保存渠道
-              </>
-            )}
-          </Button>
-        </div>
+          {editMode === 'form' ? (
+            <>
+              <Card>
+                <CardContent className="p-5">
+                  <h3 className="font-medium mb-4">基本信息</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm">渠道名称 <span className="text-destructive">*</span></Label>
+                      <Input
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        placeholder="例如：Azure GPT-4 东部"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm">渠道类型 <span className="text-destructive">*</span></Label>
+                      <Select
+                        value={formData.type}
+                        onChange={(e) => setFormData({ ...formData, type: e.target.value as ChannelConfig['type'] })}
+                      >
+                        {channelTypes.map((type) => (
+                          <option key={type.value} value={type.value}>
+                            {type.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-5">
+                  <h3 className="font-medium mb-4">连接配置</h3>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm flex items-center gap-2">
+                        <Globe className="h-4 w-4 text-muted-foreground" />
+                        API 端点 <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        value={formData.endpoint}
+                        onChange={(e) => setFormData({ ...formData, endpoint: e.target.value })}
+                        placeholder="https://your-resource.openai.azure.com/"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm">API 密钥 <span className="text-destructive">*</span></Label>
+                      <Textarea
+                        value={apiKeysInput}
+                        onChange={(e) => {
+                          setApiKeysInput(e.target.value)
+                          setFormData({ ...formData, api_keys: parseApiKeys(e.target.value) })
+                        }}
+                        placeholder={'sk-xxx\nsk-yyy'}
+                        rows={5}
+                        className="font-mono text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        可配置多个密钥，每行一个，请求会随机选取一个密钥发起调用。
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <label className="flex items-start gap-3 p-4 rounded-lg border bg-muted/30 cursor-pointer">
+                        <Checkbox
+                          className="mt-0.5"
+                          checked={formData.auto_retry ?? true}
+                          onCheckedChange={(checked) => setFormData({ ...formData, auto_retry: checked })}
+                        />
+                        <div>
+                          <div className="text-sm font-medium">自动重试</div>
+                          <p className="text-xs text-muted-foreground">单个密钥遇可重试错误时，自动重试 x3</p>
+                        </div>
+                      </label>
+                      <label className="flex items-start gap-3 p-4 rounded-lg border bg-muted/30 cursor-pointer">
+                        <Checkbox
+                          className="mt-0.5"
+                          checked={formData.auto_rotate ?? true}
+                          onCheckedChange={(checked) => setFormData({ ...formData, auto_rotate: checked })}
+                        />
+                        <div>
+                          <div className="text-sm font-medium">自动轮换</div>
+                          <p className="text-xs text-muted-foreground">单个密钥多次失败后，自动轮换密钥 x3</p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-5">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between mb-4">
+                    <div>
+                      <h3 className="font-medium flex items-center gap-2">
+                        <Cpu className="h-4 w-4 text-muted-foreground" />
+                        模型配置
+                      </h3>
+                      <p className="text-sm text-muted-foreground">外部使用模型名称调用，程序会自动映射到渠道模型 ID。</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant={modelEditorMode === 'visual' ? 'secondary' : 'outline'}
+                        size="sm"
+                        onClick={() => setModelEditorModeWithSync('visual')}
+                      >
+                        可视化
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={modelEditorMode === 'json' ? 'secondary' : 'outline'}
+                        size="sm"
+                        onClick={() => setModelEditorModeWithSync('json')}
+                      >
+                        JSON
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={handleFetchModels} disabled={fetchModelsMutation.isPending}>
+                        <RefreshCw className={cn('h-4 w-4', fetchModelsMutation.isPending && 'animate-spin')} />
+                        获取模型列表
+                      </Button>
+                    </div>
+                  </div>
+
+                  {modelEditorMode === 'visual' ? (
+                    <div className="space-y-2">
+                      <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_56px] md:gap-2 px-3 text-xs font-medium text-muted-foreground">
+                        <div>模型 ID</div>
+                        <div>模型名称</div>
+                        <div className="text-center">删除</div>
+                      </div>
+                      {modelRows.map((row, index) => {
+                        const canDelete = !isEmptyModelRow(row) || modelRows.length > 1
+
+                        return (
+                          <div key={index} className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_56px] gap-2 p-3 bg-muted/40 rounded-lg">
+                            <Input
+                              value={row.id}
+                              onChange={(e) => updateModelRow(index, 'id', e.target.value)}
+                              placeholder="模型ID，例如：gpt-4.1-mini"
+                              className="bg-background text-sm"
+                            />
+                            <Input
+                              value={row.name}
+                              onChange={(e) => updateModelRow(index, 'name', e.target.value)}
+                              placeholder="模型名称，默认等于模型ID"
+                              className="bg-background text-sm"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-10 w-10 text-destructive hover:text-destructive justify-self-start md:justify-self-center"
+                              onClick={() => removeModelRow(index)}
+                              disabled={!canDelete}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Textarea
+                        value={modelJsonValue}
+                        onChange={(e) => setModelJsonValue(e.target.value)}
+                        rows={12}
+                        className="font-mono text-sm"
+                        placeholder='[{"id":"gpt-4.1-mini","name":"gpt-4.1-mini"}]'
+                      />
+                      <p className="text-xs text-muted-foreground">JSON 结构为数组，每项包含 `id` 和 `name`。</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <Card>
+              <CardContent className="p-5">
+                <h3 className="font-medium mb-4">JSON 配置</h3>
+                <Textarea
+                  value={jsonValue}
+                  onChange={(e) => setJsonValue(e.target.value)}
+                  rows={18}
+                  className="font-mono text-sm"
+                  placeholder='{"name":"Azure OpenAI","type":"azure-openai","endpoint":"https://example.openai.azure.com/","api_keys":["sk-1","sk-2"],"auto_retry":true,"auto_rotate":true,"models":[{"id":"gpt-4.1-mini","name":"gpt-4.1-mini"}]}'
+                />
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <Button variant="outline" onClick={() => setView('list')}>
+              取消
+            </Button>
+            <Button onClick={handleSave} disabled={saveMutation.isPending}>
+              {saveMutation.isPending ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  保存中...
+                </>
+              ) : (
+                <>
+                  <Check className="h-4 w-4 mr-2" />
+                  保存渠道
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

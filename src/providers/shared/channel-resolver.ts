@@ -1,7 +1,7 @@
 import { Context } from "hono"
 import { getApiKeyFromHeaders, fetchTokenData, fetchChannelsForToken } from "./auth"
 import { RouteId, getRoutePolicy } from "./route-policy"
-import { findDeploymentMapping, findSupportedModel, getSupportedModels } from "../../utils"
+import { findChannelModelMapping } from "../../utils"
 import { TokenUtils } from "../../admin/token_utils"
 import { normalizeChannelConfig } from "../../channel-config"
 
@@ -43,15 +43,15 @@ export const resolveChannel = async (
     } catch (error) {
         return c.text("Invalid JSON body", 400);
     }
-    const model = requestBody.model;
-    if (!model) {
+    const requestedModel = requestBody.model;
+    if (!requestedModel) {
         return c.text("Model is required", 400);
     }
 
     const policy = getRoutePolicy(routeId);
     const allowedTypes = policy.allowedTypes;
 
-    const availableChannels: Array<{ key: string, config: ChannelConfig, mapping: { pattern: string, deployment: string } }> = [];
+    const availableChannels: Array<{ key: string, config: ChannelConfig, mapping: ChannelModelMapping }> = [];
 
     for (const row of channelsResult.results) {
         const config = (() => {
@@ -70,28 +70,20 @@ export const resolveChannel = async (
             continue;
         }
 
-        const supportedPattern = findSupportedModel(getSupportedModels(config), model)
-
-        if (!supportedPattern) {
+        const mapping = findChannelModelMapping(config, requestedModel);
+        if (!mapping) {
             continue;
         }
 
-        const mapping = findDeploymentMapping(config.deployment_mapper, model) || {
-            pattern: supportedPattern,
-            deployment: model,
-        };
-
-        if (mapping) {
-            availableChannels.push({
-                key: row.key,
-                config: config,
-                mapping: mapping
-            });
-        }
+        availableChannels.push({
+            key: row.key,
+            config: config,
+            mapping,
+        });
     }
 
     if (availableChannels.length === 0) {
-        return c.text(`Model not supported: ${model}. Please configure supported_models or deployment_mapper.`, 400);
+        return c.text(`Model not supported: ${requestedModel}. Please configure models.`, 400);
     }
 
     const randomIndex = Math.floor(Math.random() * availableChannels.length);
@@ -99,7 +91,7 @@ export const resolveChannel = async (
     const targetChannelKey = selectedChannel.key;
     const targetChannelConfig = selectedChannel.config;
 
-    requestBody.model = selectedChannel.mapping.deployment;
+    requestBody.model = selectedChannel.mapping.id;
 
     if (!targetChannelConfig.type) {
         return c.text("Channel type invalid", 400);
@@ -107,7 +99,7 @@ export const resolveChannel = async (
 
     const saveUsage = async (usage: Usage) => {
         try {
-            await TokenUtils.processUsage(c, apiKey, requestBody.model, targetChannelKey, targetChannelConfig, usage);
+            await TokenUtils.processUsage(c, apiKey, requestedModel, targetChannelKey, targetChannelConfig, usage);
         } catch (error) {
             console.error('Error processing usage:', error);
         }

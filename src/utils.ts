@@ -1,4 +1,5 @@
 import { Context } from "hono";
+import { normalizeChannelConfig } from "./channel-config";
 
 const getJsonObjectValue = <T = any>(
     value: string | any
@@ -107,6 +108,33 @@ export const findDeploymentMapping = (
     return null;
 }
 
+export const getChannelModels = (
+    config: Partial<Pick<ChannelConfig, "models" | "supported_models" | "deployment_mapper">>
+): ChannelModelMapping[] => {
+    return normalizeChannelConfig(config as Partial<ChannelConfig>).models;
+}
+
+export const findChannelModelMapping = (
+    config: Partial<Pick<ChannelConfig, "models" | "supported_models" | "deployment_mapper">>,
+    model: string
+): ChannelModelMapping | null => {
+    const channelModels = getChannelModels(config);
+
+    for (const channelModel of channelModels) {
+        if (channelModel.name === model) {
+            return channelModel;
+        }
+    }
+
+    for (const channelModel of channelModels) {
+        if (channelModel.name.includes('*') && wildcardMatch(channelModel.name, model)) {
+            return channelModel;
+        }
+    }
+
+    return null;
+}
+
 export const findSupportedModel = (
     supportedModels: string[] | undefined,
     model: string
@@ -127,11 +155,7 @@ export const findSupportedModel = (
 }
 
 export const getSupportedModels = (
-    config: Pick<ChannelConfig, "supported_models" | "deployment_mapper">
+    config: Pick<ChannelConfig, "models" | "supported_models" | "deployment_mapper">
 ): string[] => {
-    if (config.supported_models && config.supported_models.length > 0) {
-        return config.supported_models;
-    }
-
-    return Object.keys(config.deployment_mapper || {});
+    return getChannelModels(config).map((channelModel) => channelModel.name);
 }

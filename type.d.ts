@@ -45,6 +45,11 @@ type ChannelType =
     | undefined
     | null;
 
+type ChannelModelMapping = {
+    id: string;
+    name: string;
+}
+
 type ChannelConfig = {
     name: string;
     type: ChannelType;
@@ -53,8 +58,9 @@ type ChannelConfig = {
     api_keys?: string[];
     auto_retry?: boolean;
     auto_rotate?: boolean;
+    models?: ChannelModelMapping[];
     supported_models?: string[];
-    deployment_mapper: Record<string, string>;
+    deployment_mapper?: Record<string, string>;
     model_pricing?: Record<string, ModelPricing>;
 }
 

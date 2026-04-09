@@ -1,5 +1,6 @@
 import { Context } from "hono"
 import { normalizeUsage as normalizeResponsesUsage } from "./shared/usage-utils"
+import { buildPrefixedTargetUrl } from "./shared/prefixed-target-url"
 
 type OpenAIStreamChoice = {
     index?: number;
@@ -78,7 +79,7 @@ const buildProxyRequest = (
     reqJson: any,
     config: ChannelConfig
 ): Request => {
-    const targetUrl = new URL("v1/chat/completions", config.endpoint);
+    const targetUrl = buildPrefixedTargetUrl(config.endpoint, "/v1/chat/completions");
     const targetHeaders = new Headers(request.headers);
     const apiKey = config.api_key || "";
 

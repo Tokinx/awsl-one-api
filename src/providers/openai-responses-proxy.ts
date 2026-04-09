@@ -3,6 +3,7 @@ import {
     handleStreamResponse,
     checkoutResponsesUsageData,
 } from "./shared/responses-stream-utils"
+import { buildPrefixedTargetUrl } from "./shared/prefixed-target-url"
 
 const buildProxyRequest = (
     request: Request,
@@ -10,10 +11,8 @@ const buildProxyRequest = (
     config: ChannelConfig
 ): Request => {
     const url = new URL(request.url)
-    const targetUrl = new URL(config.endpoint)
+    const targetUrl = buildPrefixedTargetUrl(config.endpoint, url.pathname)
     const apiKey = config.api_key || ""
-
-    targetUrl.pathname = url.pathname
 
     const targetHeaders = new Headers(request.headers)
     targetHeaders.delete("Host")

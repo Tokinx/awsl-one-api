@@ -4,10 +4,13 @@ export const DEFAULT_CLAUDE_API_VERSION = "2023-06-01";
 export const MAX_RETRIES_PER_KEY = 3;
 export const MAX_ROTATION_ATTEMPTS = 3;
 
-export type NormalizedChannelConfig = Omit<ChannelConfig, "api_keys" | "auto_retry" | "auto_rotate"> & {
+export type NormalizedChannelConfig = Omit<ChannelConfig, "api_keys" | "auto_retry" | "auto_rotate" | "models" | "supported_models" | "deployment_mapper"> & {
     api_keys: string[];
     auto_retry: boolean;
     auto_rotate: boolean;
+    models: ChannelModelMapping[];
+    supported_models: string[];
+    deployment_mapper: Record<string, string>;
 };
 
 const normalizeApiKeys = (config: Partial<ChannelConfig>): string[] => {
@@ -34,9 +37,70 @@ const normalizeApiKeys = (config: Partial<ChannelConfig>): string[] => {
     return normalizedKeys;
 };
 
+const normalizeLegacyModels = (config: Partial<ChannelConfig>): ChannelModelMapping[] => {
+    const normalizedModels: ChannelModelMapping[] = [];
+    const seenNames = new Set<string>();
+
+    const pushModel = (modelId: string, modelName?: string) => {
+        const id = modelId.trim();
+        const name = (modelName || modelId).trim();
+
+        if (!id || !name || seenNames.has(name)) {
+            return;
+        }
+
+        seenNames.add(name);
+        normalizedModels.push({ id, name });
+    };
+
+    if (Array.isArray(config.models)) {
+        for (const model of config.models) {
+            if (!model || typeof model !== "object") {
+                continue;
+            }
+
+            const id = typeof model.id === "string" ? model.id : "";
+            const name = typeof model.name === "string" ? model.name : id;
+            pushModel(id, name);
+        }
+    }
+
+    const deploymentMapper = config.deployment_mapper || {};
+    const supportedModels = Array.isArray(config.supported_models)
+        ? config.supported_models
+        : [];
+
+    for (const supportedModel of supportedModels) {
+        if (typeof supportedModel !== "string") {
+            continue;
+        }
+
+        pushModel(
+            typeof deploymentMapper[supportedModel] === "string"
+                ? deploymentMapper[supportedModel]
+                : supportedModel,
+            supportedModel,
+        );
+    }
+
+    for (const [modelName, modelId] of Object.entries(deploymentMapper)) {
+        if (typeof modelId !== "string") {
+            continue;
+        }
+        pushModel(modelId, modelName);
+    }
+
+    return normalizedModels;
+};
+
 export const normalizeChannelConfig = (
     config: Partial<ChannelConfig>
 ): NormalizedChannelConfig => {
+    const models = normalizeLegacyModels(config);
+    const deploymentMapper = Object.fromEntries(
+        models.map((model) => [model.name, model.id])
+    );
+
     return {
         name: config.name || "",
         type: config.type,
@@ -45,8 +109,9 @@ export const normalizeChannelConfig = (
         api_keys: normalizeApiKeys(config),
         auto_retry: config.auto_retry ?? DEFAULT_CHANNEL_AUTO_RETRY,
         auto_rotate: config.auto_rotate ?? DEFAULT_CHANNEL_AUTO_ROTATE,
-        supported_models: Array.isArray(config.supported_models) ? config.supported_models : [],
-        deployment_mapper: config.deployment_mapper || {},
+        models,
+        supported_models: models.map((model) => model.name),
+        deployment_mapper: deploymentMapper,
         model_pricing: config.model_pricing,
     };
 };
@@ -63,8 +128,7 @@ export const sanitizeChannelConfig = (
         api_keys: normalized.api_keys,
         auto_retry: normalized.auto_retry,
         auto_rotate: normalized.auto_rotate,
-        supported_models: normalized.supported_models,
-        deployment_mapper: normalized.deployment_mapper,
+        models: normalized.models,
         model_pricing: normalized.model_pricing,
     };
 };

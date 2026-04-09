@@ -3,7 +3,138 @@ import { contentJson, OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 
 import { CommonErrorResponse, CommonSuccessfulResponse } from "../model";
-import { sanitizeChannelConfig } from "../channel-config";
+import {
+    DEFAULT_CLAUDE_API_VERSION,
+    type NormalizedChannelConfig,
+    normalizeChannelConfig,
+    sanitizeChannelConfig,
+} from "../channel-config";
+import { buildAzureTargetUrlFromPath } from "../providers/shared/azure-target-url";
+import { buildPrefixedTargetUrl } from "../providers/shared/prefixed-target-url";
+
+const ChannelModelSchema = z.object({
+    id: z.string().describe('Upstream model ID'),
+    name: z.string().describe('External model name exposed by this proxy'),
+});
+
+const parseFetchedModels = (payload: any): ChannelModelMapping[] => {
+    const rawModels = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.data)
+            ? payload.data
+            : Array.isArray(payload?.models)
+                ? payload.models
+                : [];
+
+    const normalizedModels: ChannelModelMapping[] = [];
+    const seenIds = new Set<string>();
+
+    for (const rawModel of rawModels) {
+        if (typeof rawModel === "string") {
+            const id = rawModel.trim();
+            if (!id || seenIds.has(id)) {
+                continue;
+            }
+            seenIds.add(id);
+            normalizedModels.push({ id, name: id });
+            continue;
+        }
+
+        if (!rawModel || typeof rawModel !== "object") {
+            continue;
+        }
+
+        const id = (
+            typeof rawModel.id === "string" ? rawModel.id
+                : typeof rawModel.model === "string" ? rawModel.model
+                    : typeof rawModel.name === "string" ? rawModel.name
+                        : ""
+        ).trim();
+
+        if (!id || seenIds.has(id)) {
+            continue;
+        }
+
+        const name = (
+            typeof rawModel.display_name === "string" ? rawModel.display_name
+                : typeof rawModel.name === "string" ? rawModel.name
+                    : id
+        ).trim() || id;
+
+        seenIds.add(id);
+        normalizedModels.push({ id, name: name || id });
+    }
+
+    return normalizedModels;
+};
+
+const buildModelsFetchRequest = (
+    config: NormalizedChannelConfig,
+    apiKey: string
+): Request => {
+    let targetUrl: URL;
+    const headers = new Headers({
+        "Accept": "application/json",
+    });
+
+    switch (config.type) {
+        case "azure-openai":
+        case "azure-openai-audio":
+        case "azure-openai-responses":
+            targetUrl = buildAzureTargetUrlFromPath(config.endpoint, "/v1/models");
+            headers.set("api-key", apiKey);
+            break;
+        case "claude":
+            targetUrl = new URL("v1/models", config.endpoint);
+            headers.set("x-api-key", apiKey);
+            headers.set("anthropic-version", DEFAULT_CLAUDE_API_VERSION);
+            break;
+        case "openai":
+        case "openai-audio":
+        case "openai-responses":
+        case "claude-to-openai":
+        default:
+            targetUrl = buildPrefixedTargetUrl(config.endpoint, "/v1/models");
+            headers.set("Authorization", `Bearer ${apiKey}`);
+            break;
+    }
+
+    return new Request(targetUrl, {
+        method: "GET",
+        headers,
+    });
+};
+
+const fetchModelsFromChannel = async (
+    config: ChannelConfig
+): Promise<ChannelModelMapping[]> => {
+    const normalizedConfig = normalizeChannelConfig(config);
+
+    if (!normalizedConfig.endpoint || !normalizedConfig.type) {
+        throw new Error("Channel endpoint and type are required");
+    }
+
+    if (normalizedConfig.api_keys.length === 0) {
+        throw new Error("At least one API key is required");
+    }
+
+    let lastError = "Failed to fetch models from upstream";
+
+    for (const apiKey of normalizedConfig.api_keys) {
+        const response = await fetch(buildModelsFetchRequest(normalizedConfig, apiKey));
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            lastError = errorText || `Upstream returned ${response.status}`;
+            continue;
+        }
+
+        const responseJson = await response.json();
+        return parseFetchedModels(responseJson);
+    }
+
+    throw new Error(lastError);
+};
 
 // 获取所有 Channel 配置
 export class ChannelGetEndpoint extends OpenAPIRoute {
@@ -53,8 +184,9 @@ export class ChannelUpsertEndpoint extends OpenAPIRoute {
                             api_keys: z.array(z.string()).optional().describe('API keys, one request will pick one randomly'),
                             auto_retry: z.boolean().optional().describe('Automatically retry the same API key'),
                             auto_rotate: z.boolean().optional().describe('Automatically rotate to other API keys on retryable failures'),
-                            supported_models: z.array(z.string()).describe('Supported request model list'),
-                            deployment_mapper: z.record(z.string()).describe('Model deployment mapping'),
+                            models: z.array(ChannelModelSchema).optional().describe('External model name to upstream model ID mappings'),
+                            supported_models: z.array(z.string()).optional().describe('Deprecated supported request model list'),
+                            deployment_mapper: z.record(z.string()).optional().describe('Deprecated model deployment mapping'),
                             model_pricing: z.record(z.object({
                                 input: z.number().describe('Input token price per 1000 tokens'),
                                 output: z.number().describe('Output token price per 1000 tokens'),
@@ -104,6 +236,58 @@ export class ChannelUpsertEndpoint extends OpenAPIRoute {
             success: true,
             data: true
         } as CommonResponse;
+    }
+}
+
+export class ChannelFetchModelsEndpoint extends OpenAPIRoute {
+    schema = {
+        tags: ['Admin API'],
+        summary: 'Fetch upstream model list for a channel config',
+        request: {
+            body: {
+                content: {
+                    'application/json': {
+                        schema: z.object({
+                            name: z.string().optional(),
+                            type: z.string().optional(),
+                            endpoint: z.string().optional(),
+                            api_key: z.string().optional(),
+                            api_keys: z.array(z.string()).optional(),
+                            auto_retry: z.boolean().optional(),
+                            auto_rotate: z.boolean().optional(),
+                            models: z.array(ChannelModelSchema).optional(),
+                            supported_models: z.array(z.string()).optional(),
+                            deployment_mapper: z.record(z.string()).optional(),
+                            model_pricing: z.record(z.object({
+                                input: z.number(),
+                                output: z.number(),
+                                cache: z.number().optional(),
+                                request: z.number().optional(),
+                            })).optional(),
+                        }),
+                    },
+                },
+            },
+        },
+        responses: {
+            ...CommonSuccessfulResponse(z.array(ChannelModelSchema)),
+            ...CommonErrorResponse,
+        },
+    };
+
+    async handle(c: Context<HonoCustomType>) {
+        const rawConfig = await c.req.json<ChannelConfig>();
+
+        try {
+            const models = await fetchModelsFromChannel(rawConfig);
+            return {
+                success: true,
+                data: models,
+            } as CommonResponse;
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Failed to fetch models";
+            return c.text(message, 502);
+        }
     }
 }
 

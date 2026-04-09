@@ -15,13 +15,20 @@ export const buildAzureTargetUrl = (
     endpoint: string
 ): URL => {
     const requestUrl = new URL(request.url);
+    return buildAzureTargetUrlFromPath(endpoint, requestUrl.pathname);
+};
+
+export const buildAzureTargetUrlFromPath = (
+    endpoint: string,
+    path: string
+): URL => {
     const targetUrl = new URL(endpoint);
 
     if (endpoint.endsWith("#")) {
         return targetUrl;
     }
 
-    const requestPath = requestUrl.pathname.replace(/^\/v1/, "");
+    const requestPath = path.replace(/^\/v1/, "");
     const currentBasePath = trimSlashes(targetUrl.pathname);
     const azureBasePath = currentBasePath.endsWith("openai/v1")
         ? currentBasePath

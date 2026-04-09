@@ -4,6 +4,11 @@ export interface Channel {
   usage?: number
 }
 
+export interface ChannelModelMapping {
+  id: string
+  name: string
+}
+
 export interface ChannelConfig {
   name: string
   type: 'openai' | 'azure-openai' | 'openai-audio' | 'azure-openai-audio' | 'claude' | 'claude-to-openai' | 'openai-responses' | 'azure-openai-responses'
@@ -12,8 +17,9 @@ export interface ChannelConfig {
   api_keys?: string[]
   auto_retry?: boolean
   auto_rotate?: boolean
-  supported_models: string[]
-  deployment_mapper: Record<string, string>
+  models?: ChannelModelMapping[]
+  supported_models?: string[]
+  deployment_mapper?: Record<string, string>
   model_pricing?: Record<string, PricingModel>
 }
 

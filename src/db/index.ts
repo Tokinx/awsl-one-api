@@ -1,6 +1,7 @@
 import { Context } from "hono";
 import { CONSTANTS } from "../constants";
 import { getSetting, saveSetting } from "../utils";
+import { sanitizeChannelConfig } from "../channel-config";
 
 const DB_INIT_QUERIES = `
 CREATE TABLE IF NOT EXISTS channel_config (
@@ -65,13 +66,13 @@ const dbOperations = {
                 continue;
             }
 
-            config.supported_models = Object.keys(config.deployment_mapper || {});
+            const sanitizedConfig = sanitizeChannelConfig(config);
 
             await c.env.DB.prepare(
                 `UPDATE channel_config
                  SET value = ?, updated_at = datetime('now')
                  WHERE key = ?`
-            ).bind(JSON.stringify(config), row.key).run();
+            ).bind(JSON.stringify(sanitizedConfig), row.key).run();
         }
 
         await saveSetting(c, CONSTANTS.DB_VERSION_KEY, CONSTANTS.DB_VERSION);
