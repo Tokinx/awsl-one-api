@@ -6,6 +6,7 @@ import db from "../db"
 import { resolveRouteId } from "./shared/route-policy"
 import { resolveChannel } from "./shared/channel-resolver"
 import { getProvider } from "./shared/provider-registry"
+import { executeWithChannelKeys } from "./shared/upstream-retry"
 import { ModelsEndpoint } from "./models"
 
 export const api = fromHono(new Hono<HonoCustomType>())
@@ -50,7 +51,7 @@ class UnifiedProxyEndpoint extends OpenAPIRoute {
             return c.text("Channel type not supported", 400)
         }
 
-        return provider(c, channel.config, requestBody, saveUsage)
+        return executeWithChannelKeys(c, channel.config, requestBody, saveUsage, provider)
     }
 }
 

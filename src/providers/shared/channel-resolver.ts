@@ -3,6 +3,7 @@ import { getApiKeyFromHeaders, fetchTokenData, fetchChannelsForToken } from "./a
 import { RouteId, getRoutePolicy } from "./route-policy"
 import { findDeploymentMapping, findSupportedModel, getSupportedModels } from "../../utils"
 import { TokenUtils } from "../../admin/token_utils"
+import { normalizeChannelConfig } from "../../channel-config"
 
 export type ChannelResolution = {
     channel: { key: string; config: ChannelConfig }
@@ -53,7 +54,13 @@ export const resolveChannel = async (
     const availableChannels: Array<{ key: string, config: ChannelConfig, mapping: { pattern: string, deployment: string } }> = [];
 
     for (const row of channelsResult.results) {
-        const config = (() => { try { return JSON.parse(row.value) as ChannelConfig; } catch { return null; } })();
+        const config = (() => {
+            try {
+                return normalizeChannelConfig(JSON.parse(row.value) as ChannelConfig);
+            } catch {
+                return null;
+            }
+        })();
         if (!config) {
             console.error(`Invalid channel config for key: ${row.key}`);
             continue;

@@ -8,10 +8,13 @@ export interface ChannelConfig {
   name: string
   type: 'openai' | 'azure-openai' | 'openai-audio' | 'azure-openai-audio' | 'claude' | 'claude-to-openai' | 'openai-responses' | 'azure-openai-responses'
   endpoint: string
-  api_key: string
-  api_version?: string
+  api_key?: string
+  api_keys?: string[]
+  auto_retry?: boolean
+  auto_rotate?: boolean
   supported_models: string[]
   deployment_mapper: Record<string, string>
+  model_pricing?: Record<string, PricingModel>
 }
 
 export interface Token {

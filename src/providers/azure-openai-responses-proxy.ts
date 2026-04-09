@@ -3,28 +3,21 @@ import {
     handleStreamResponse,
     checkoutResponsesUsageData,
 } from "./shared/responses-stream-utils"
+import { buildAzureTargetUrl } from "./shared/azure-target-url"
 
 const buildProxyRequest = (
     request: Request,
     reqJson: any,
     config: ChannelConfig
 ): Request => {
-    const url = new URL(request.url)
-    const targetUrl = new URL(config.endpoint)
-
-    if (!config.endpoint.endsWith('#')) {
-        targetUrl.pathname = `/openai${url.pathname}`
-    }
-
-    if (config.api_version) {
-        targetUrl.searchParams.set('api-version', config.api_version)
-    }
+    const targetUrl = buildAzureTargetUrl(request, config.endpoint)
+    const apiKey = config.api_key || ""
 
     const targetHeaders = new Headers(request.headers)
     targetHeaders.delete("Authorization")
     targetHeaders.delete("Host")
     targetHeaders.delete("Cookie")
-    targetHeaders.set("api-key", config.api_key)
+    targetHeaders.set("api-key", apiKey)
 
     return new Request(targetUrl, {
         method: request.method,

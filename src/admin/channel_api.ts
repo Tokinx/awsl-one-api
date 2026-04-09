@@ -3,6 +3,7 @@ import { contentJson, OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 
 import { CommonErrorResponse, CommonSuccessfulResponse } from "../model";
+import { sanitizeChannelConfig } from "../channel-config";
 
 // 获取所有 Channel 配置
 export class ChannelGetEndpoint extends OpenAPIRoute {
@@ -48,8 +49,10 @@ export class ChannelUpsertEndpoint extends OpenAPIRoute {
                             name: z.string().describe('Channel name'),
                             type: z.string().describe('Channel type'),
                             endpoint: z.string().describe('API endpoint'),
-                            api_key: z.string().describe('API key'),
-                            api_version: z.string().optional().describe('API version'),
+                            api_key: z.string().optional().describe('Deprecated single API key'),
+                            api_keys: z.array(z.string()).optional().describe('API keys, one request will pick one randomly'),
+                            auto_retry: z.boolean().optional().describe('Automatically retry the same API key'),
+                            auto_rotate: z.boolean().optional().describe('Automatically rotate to other API keys on retryable failures'),
                             supported_models: z.array(z.string()).describe('Supported request model list'),
                             deployment_mapper: z.record(z.string()).describe('Model deployment mapping'),
                             model_pricing: z.record(z.object({
@@ -71,7 +74,16 @@ export class ChannelUpsertEndpoint extends OpenAPIRoute {
 
     async handle(c: Context<HonoCustomType>) {
         const { key } = c.req.param();
-        const config = await c.req.json<ChannelConfig>();
+        const rawConfig = await c.req.json<ChannelConfig>();
+        const config = sanitizeChannelConfig(rawConfig);
+
+        if (!config.name || !config.endpoint) {
+            return c.text('Channel name and endpoint are required', 400);
+        }
+
+        if (!config.api_keys || config.api_keys.length === 0) {
+            return c.text('At least one API key is required', 400);
+        }
 
         // Upsert channel config directly using SQL
         // excluded.value 指的是 INSERT 语句中要插入的新值

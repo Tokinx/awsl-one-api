@@ -101,7 +101,7 @@ export const checkoutResponsesUsageData = async (
     requestBody: any,
 ): Promise<void> => {
     try {
-        const resJson = await response.clone().json<OpenAIResponsesResponse>()
+        const resJson = await response.clone().json() as OpenAIResponsesResponse
         const usage = extractUsageFromResponse(resJson)
         if (usage) {
             await saveUsage(usage)

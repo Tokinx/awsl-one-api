@@ -7,7 +7,7 @@ import claudeToOpenaiProxy from "../claude-to-openai-proxy"
 import openaiResponsesProxy from "../openai-responses-proxy"
 import azureOpenaiResponsesProxy from "../azure-openai-responses-proxy"
 
-type ProviderFetch = (
+export type ProviderFetch = (
     c: Context<HonoCustomType>,
     config: ChannelConfig,
     requestBody: any,

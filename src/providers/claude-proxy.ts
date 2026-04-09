@@ -1,4 +1,5 @@
 import { Context } from "hono"
+import { DEFAULT_CLAUDE_API_VERSION } from "../channel-config"
 
 /**
  * Claude API Proxy Provider
@@ -55,6 +56,7 @@ const buildProxyRequest = (
 ): Request => {
     const url = new URL(request.url)
     const targetUrl = new URL(config.endpoint)
+    const apiKey = config.api_key || ""
 
     // Claude API uses /v1/messages endpoint
     targetUrl.pathname = url.pathname
@@ -66,11 +68,9 @@ const buildProxyRequest = (
     targetHeaders.delete("x-api-key")
 
     // Claude uses x-api-key header instead of Authorization
-    targetHeaders.set("x-api-key", config.api_key)
+    targetHeaders.set("x-api-key", apiKey)
     // Claude requires anthropic-version header
-    if (config.api_version) {
-        targetHeaders.set("anthropic-version", config.api_version)
-    }
+    targetHeaders.set("anthropic-version", DEFAULT_CLAUDE_API_VERSION)
 
     return new Request(targetUrl, {
         method: request.method,
@@ -91,7 +91,7 @@ const checkoutUsageData = async (
 ): Promise<void> => {
     try {
         const res = response instanceof Response
-            ? await response.clone().json<ClaudeMessageResponse>()
+            ? await response.clone().json() as ClaudeMessageResponse
             : response
 
         if (!res.usage) return;

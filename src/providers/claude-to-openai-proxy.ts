@@ -80,10 +80,11 @@ const buildProxyRequest = (
 ): Request => {
     const targetUrl = new URL("v1/chat/completions", config.endpoint);
     const targetHeaders = new Headers(request.headers);
+    const apiKey = config.api_key || "";
 
     targetHeaders.delete("Authorization");
     targetHeaders.delete("x-api-key");
-    targetHeaders.set("Authorization", `Bearer ${config.api_key}`);
+    targetHeaders.set("Authorization", `Bearer ${apiKey}`);
 
     return new Request(targetUrl, {
         method: request.method,
@@ -564,7 +565,7 @@ export default {
 
         if (response.ok) {
             try {
-                const resJson = await response.clone().json<OpenAIResponse & Record<string, any>>();
+                const resJson = await response.clone().json() as OpenAIResponse & Record<string, any>;
                 const usage = normalizeResponsesUsage(resJson?.usage);
                 if (usage) {
                     await saveUsage(usage);

@@ -66,7 +66,7 @@ export const checkoutUsageData = async (
                 return
             }
 
-            const res = await response.clone().json<OpenAIResponse>()
+            const res = await response.clone().json() as OpenAIResponse
             if (!res.usage) return;
             await saveUsage(res.usage)
             return

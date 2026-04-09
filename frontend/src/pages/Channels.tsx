@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
 import {
@@ -41,21 +42,61 @@ const channelTypes = [
   { value: 'azure-openai-responses', label: 'Azure OpenAI Responses' },
 ]
 
+const createDefaultChannelFormData = (): ChannelConfig => ({
+  name: '',
+  type: 'azure-openai',
+  endpoint: '',
+  api_keys: [],
+  auto_retry: true,
+  auto_rotate: true,
+  supported_models: [],
+  deployment_mapper: {},
+})
+
+const parseApiKeys = (value: string): string[] => {
+  const seen = new Set<string>()
+
+  return value
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .filter((line) => {
+      if (seen.has(line)) {
+        return false
+      }
+      seen.add(line)
+      return true
+    })
+}
+
+const formatApiKeys = (apiKeys?: string[]): string => {
+  return (apiKeys || []).join('\n')
+}
+
+const normalizeChannelFormConfig = (config: ChannelConfig): ChannelConfig => {
+  const legacyApiKey = typeof config.api_key === 'string' ? config.api_key.trim() : ''
+  const rawApiKeys = Array.isArray(config.api_keys) ? config.api_keys : []
+  const mergedKeys = parseApiKeys([legacyApiKey, ...rawApiKeys].join('\n'))
+
+  return {
+    ...config,
+    api_key: undefined,
+    api_keys: mergedKeys,
+    auto_retry: config.auto_retry ?? true,
+    auto_rotate: config.auto_rotate ?? true,
+    supported_models: Array.isArray(config.supported_models) ? config.supported_models : [],
+    deployment_mapper: config.deployment_mapper || {},
+  }
+}
+
 export function Channels() {
   const [view, setView] = useState<'list' | 'form'>('list')
   const [editMode, setEditMode] = useState<EditMode>('form')
   const [editingKey, setEditingKey] = useState<string | null>(null)
-  const [formData, setFormData] = useState<ChannelConfig>({
-    name: '',
-    type: 'azure-openai',
-    endpoint: '',
-    api_key: '',
-    api_version: '',
-    supported_models: [],
-    deployment_mapper: {},
-  })
+  const [formData, setFormData] = useState<ChannelConfig>(createDefaultChannelFormData())
   const [channelKey, setChannelKey] = useState('')
   const [jsonValue, setJsonValue] = useState('')
+  const [apiKeysInput, setApiKeysInput] = useState('')
   const [supportedModelRows, setSupportedModelRows] = useState<Array<{ model: string }>>([])
   const [mapperRows, setMapperRows] = useState<Array<{ request: string; deployment: string }>>([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -107,17 +148,10 @@ export function Channels() {
   })
 
   const resetForm = () => {
-    setFormData({
-      name: '',
-      type: 'azure-openai',
-      endpoint: '',
-      api_key: '',
-      api_version: '',
-      supported_models: [],
-      deployment_mapper: {},
-    })
+    setFormData(createDefaultChannelFormData())
     setChannelKey('')
     setJsonValue('')
+    setApiKeysInput('')
     setSupportedModelRows([])
     setMapperRows([])
     setEditingKey(null)
@@ -132,18 +166,17 @@ export function Channels() {
   const handleEdit = (channel: Channel) => {
     setEditingKey(channel.key)
     setChannelKey(channel.key)
-    const config = typeof channel.value === 'string' ? JSON.parse(channel.value) : channel.value
+    const rawConfig = typeof channel.value === 'string' ? JSON.parse(channel.value) : channel.value
+    const config = normalizeChannelFormConfig(rawConfig)
     setFormData(config)
     setJsonValue(JSON.stringify(config, null, 2))
+    setApiKeysInput(formatApiKeys(config.api_keys))
     setSupportedModelRows((config.supported_models || []).map((model) => ({ model })))
-
-    if (config.deployment_mapper) {
-      const rows = Object.entries(config.deployment_mapper).map(([request, deployment]) => ({
-        request,
-        deployment: deployment as string,
-      }))
-      setMapperRows(rows)
-    }
+    const rows = Object.entries(config.deployment_mapper || {}).map(([request, deployment]) => ({
+      request,
+      deployment: deployment as string,
+    }))
+    setMapperRows(rows)
     setView('form')
   }
 
@@ -159,13 +192,7 @@ export function Channels() {
       return
     }
 
-    let config: any
-    if (editMode === 'form') {
-      if (!formData.name || !formData.endpoint || !formData.api_key) {
-        addToast('请填写所有必填字段', 'error')
-        return
-      }
-
+    const buildFormConfig = () => {
       const deployment_mapper: Record<string, string> = {}
       mapperRows.forEach((row) => {
         if (row.request && row.deployment) {
@@ -177,18 +204,36 @@ export function Channels() {
         .map((row) => row.model.trim())
         .filter((model) => model.length > 0)
 
-      if (supported_models.length === 0) {
+      return normalizeChannelFormConfig({
+        ...formData,
+        api_key: undefined,
+        api_keys: parseApiKeys(apiKeysInput),
+        supported_models,
+        deployment_mapper,
+      })
+    }
+
+    let config: any
+    if (editMode === 'form') {
+      const apiKeys = parseApiKeys(apiKeysInput)
+      const supportedModels = supportedModelRows
+        .map((row) => row.model.trim())
+        .filter((model) => model.length > 0)
+
+      if (!formData.name || !formData.endpoint || apiKeys.length === 0) {
+        addToast('请填写所有必填字段', 'error')
+        return
+      }
+
+      if (supportedModels.length === 0) {
         addToast('请至少填写一个支持模型', 'error')
         return
       }
 
-      config = { ...formData, supported_models, deployment_mapper }
-      if (!formData.api_version) {
-        delete config.api_version
-      }
+      config = buildFormConfig()
     } else {
       try {
-        config = JSON.parse(jsonValue)
+        config = normalizeChannelFormConfig(JSON.parse(jsonValue))
       } catch {
         addToast('JSON格式错误', 'error')
         return
@@ -209,21 +254,26 @@ export function Channels() {
       const supported_models = supportedModelRows
         .map((row) => row.model.trim())
         .filter((model) => model.length > 0)
-      const config = { ...formData, supported_models, deployment_mapper }
+      const config = normalizeChannelFormConfig({
+        ...formData,
+        api_key: undefined,
+        api_keys: parseApiKeys(apiKeysInput),
+        supported_models,
+        deployment_mapper,
+      })
       setJsonValue(JSON.stringify(config, null, 2))
       setEditMode('json')
     } else {
       try {
-        const config = JSON.parse(jsonValue)
+        const config = normalizeChannelFormConfig(JSON.parse(jsonValue))
         setFormData(config)
+        setApiKeysInput(formatApiKeys(config.api_keys))
         setSupportedModelRows((config.supported_models || []).map((model: string) => ({ model })))
-        if (config.deployment_mapper) {
-          const rows = Object.entries(config.deployment_mapper).map(([request, deployment]) => ({
-            request,
-            deployment: deployment as string,
-          }))
-          setMapperRows(rows)
-        }
+        const rows = Object.entries(config.deployment_mapper || {}).map(([request, deployment]) => ({
+          request,
+          deployment: deployment as string,
+        }))
+        setMapperRows(rows)
         setEditMode('form')
       } catch {
         addToast('JSON格式错误', 'error')
@@ -514,26 +564,45 @@ export function Channels() {
                       placeholder="https://your-resource.openai.azure.com/"
                     />
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-sm">API 密钥 <span className="text-destructive">*</span></Label>
-                      <Input
-                        type="password"
-                        value={formData.api_key}
-                        onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
-                        placeholder="sk-..."
+                  <div className="space-y-2">
+                    <Label className="text-sm">API 密钥 <span className="text-destructive">*</span></Label>
+                    <Textarea
+                      value={apiKeysInput}
+                      onChange={(e) => {
+                        setApiKeysInput(e.target.value)
+                        setFormData({ ...formData, api_keys: parseApiKeys(e.target.value) })
+                      }}
+                      placeholder={'sk-xxx\nsk-yyy'}
+                      rows={5}
+                      className="font-mono text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      可配置多个密钥，每行一个，请求会随机选取一个密钥发起调用。
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <label className="flex items-start gap-3 p-4 rounded-lg border bg-muted/30 cursor-pointer">
+                      <Checkbox
+                        className="mt-0.5"
+                        checked={formData.auto_retry ?? true}
+                        onCheckedChange={(checked) => setFormData({ ...formData, auto_retry: checked })}
                       />
-                    </div>
-                    {(formData.type === 'azure-openai' || formData.type === 'azure-openai-audio' || formData.type === 'claude' || formData.type === 'azure-openai-responses') && (
-                      <div className="space-y-2">
-                        <Label className="text-sm">API 版本</Label>
-                        <Input
-                          value={formData.api_version || ''}
-                          onChange={(e) => setFormData({ ...formData, api_version: e.target.value })}
-                          placeholder="2024-02-01"
-                        />
+                      <div>
+                        <div className="text-sm font-medium">自动重试</div>
+                        <p className="text-xs text-muted-foreground">单个密钥遇可重试错误时，自动重试 x3</p>
                       </div>
-                    )}
+                    </label>
+                    <label className="flex items-start gap-3 p-4 rounded-lg border bg-muted/30 cursor-pointer">
+                      <Checkbox
+                        className="mt-0.5"
+                        checked={formData.auto_rotate ?? true}
+                        onCheckedChange={(checked) => setFormData({ ...formData, auto_rotate: checked })}
+                      />
+                      <div>
+                        <div className="text-sm font-medium">自动轮换</div>
+                        <p className="text-xs text-muted-foreground">单个密钥多次失败后，自动轮换密钥 x3</p>
+                      </div>
+                    </label>
                   </div>
                 </div>
               </CardContent>
@@ -658,7 +727,7 @@ export function Channels() {
                 onChange={(e) => setJsonValue(e.target.value)}
                 rows={18}
                 className="font-mono text-sm"
-                placeholder='{"name": "Azure OpenAI", "type": "azure-openai", ...}'
+                placeholder='{"name":"Azure OpenAI","type":"azure-openai","endpoint":"https://example.openai.azure.com/","api_keys":["sk-1","sk-2"],"auto_retry":true,"auto_rotate":true}'
               />
             </CardContent>
           </Card>

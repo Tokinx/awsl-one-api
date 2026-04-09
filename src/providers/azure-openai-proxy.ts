@@ -1,31 +1,20 @@
 import { Context } from "hono"
 import { checkoutUsageData, handleStreamResponse } from "./shared/openai-stream-utils"
+import { buildAzureTargetUrl } from "./shared/azure-target-url"
 
 const buildProxyRequest = (
     request: Request,
     reqJson: any,
-    config: ChannelConfig,
-    deploymentName: string
+    config: ChannelConfig
 ): Request => {
-    const url = new URL(request.url)
-    const targetUrl = new URL(config.endpoint)
-
-    if (!config.endpoint.endsWith('#')) {
-        const basePath = targetUrl.pathname.endsWith('/')
-            ? targetUrl.pathname.slice(0, -1)
-            : targetUrl.pathname
-        targetUrl.pathname = `${basePath}/openai/deployments/${deploymentName}/${url.pathname.replace('/v1/', '')}`
-    }
-
-    if (config.api_version) {
-        targetUrl.searchParams.set('api-version', config.api_version)
-    }
+    const targetUrl = buildAzureTargetUrl(request, config.endpoint)
+    const apiKey = config.api_key || ""
 
     const targetHeaders = new Headers(request.headers)
     targetHeaders.delete("Authorization")
     targetHeaders.delete("Host")
     targetHeaders.delete("Cookie")
-    targetHeaders.set("api-key", config.api_key)
+    targetHeaders.set("api-key", apiKey)
 
     return new Request(targetUrl, {
         method: request.method,
@@ -41,7 +30,7 @@ export default {
         requestBody: any,
         saveUsage: (usage: Usage) => Promise<void>,
     ): Promise<Response> {
-        const { model: deploymentName, stream } = requestBody;
+        const { stream } = requestBody;
 
         if (stream) {
             requestBody.stream_options = {
@@ -50,7 +39,7 @@ export default {
             }
         }
 
-        const proxyRequest = buildProxyRequest(c.req.raw, requestBody, config, deploymentName)
+        const proxyRequest = buildProxyRequest(c.req.raw, requestBody, config)
         const response = await fetch(proxyRequest)
 
         if (stream) {

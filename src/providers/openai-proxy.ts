@@ -8,13 +8,14 @@ const buildProxyRequest = (
 ): Request => {
     const url = new URL(request.url)
     const targetUrl = new URL(config.endpoint)
+    const apiKey = config.api_key || ""
 
     targetUrl.pathname = url.pathname
 
     const targetHeaders = new Headers(request.headers)
     targetHeaders.delete("Host")
     targetHeaders.delete("Cookie")
-    targetHeaders.set("Authorization", `Bearer ${config.api_key}`)
+    targetHeaders.set("Authorization", `Bearer ${apiKey}`)
 
     return new Request(targetUrl, {
         method: request.method,

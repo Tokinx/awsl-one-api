@@ -49,8 +49,10 @@ type ChannelConfig = {
     name: string;
     type: ChannelType;
     endpoint: string;
-    api_key: string;
-    api_version?: string;
+    api_key?: string;
+    api_keys?: string[];
+    auto_retry?: boolean;
+    auto_rotate?: boolean;
     supported_models?: string[];
     deployment_mapper: Record<string, string>;
     model_pricing?: Record<string, ModelPricing>;
