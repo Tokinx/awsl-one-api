@@ -4,16 +4,20 @@ type RoutePolicy = {
     allowedTypes: ChannelType[] | null
 }
 
-const TEXT_CHANNEL_TYPES: ChannelType[] = [
+const CHAT_COMPLETIONS_CHANNEL_TYPES: ChannelType[] = [
     "openai",
     "azure-openai",
+    "gemini",
+]
+
+const MESSAGES_CHANNEL_TYPES: ChannelType[] = [
     "claude",
     "claude-to-openai",
 ]
 
 const ROUTE_POLICIES: Record<RouteId, RoutePolicy> = {
-    "chat-completions": { allowedTypes: TEXT_CHANNEL_TYPES },
-    "messages":         { allowedTypes: TEXT_CHANNEL_TYPES },
+    "chat-completions": { allowedTypes: CHAT_COMPLETIONS_CHANNEL_TYPES },
+    "messages":         { allowedTypes: MESSAGES_CHANNEL_TYPES },
     "responses":        { allowedTypes: ["openai-responses", "azure-openai-responses"] },
     "audio-speech":     { allowedTypes: ["openai-audio", "azure-openai-audio"] },
 }

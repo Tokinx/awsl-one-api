@@ -11,7 +11,7 @@ export interface ChannelModelMapping {
 
 export interface ChannelConfig {
   name: string
-  type: 'openai' | 'azure-openai' | 'openai-audio' | 'azure-openai-audio' | 'claude' | 'claude-to-openai' | 'openai-responses' | 'azure-openai-responses'
+  type: 'openai' | 'gemini' | 'azure-openai' | 'openai-audio' | 'azure-openai-audio' | 'claude' | 'claude-to-openai' | 'openai-responses' | 'azure-openai-responses'
   endpoint: string
   api_key?: string
   api_keys?: string[]

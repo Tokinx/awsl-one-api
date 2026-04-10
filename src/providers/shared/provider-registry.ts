@@ -17,6 +17,7 @@ export type ProviderFetch = (
 const providerMap: Record<string, ProviderFetch> = {
     "azure-openai": azureOpenaiProxy.fetch,
     "openai": openaiProxy.fetch,
+    "gemini": openaiProxy.fetch,
     "azure-openai-audio": azureOpenaiProxy.fetch,
     "openai-audio": openaiProxy.fetch,
     "claude": claudeProxy.fetch,

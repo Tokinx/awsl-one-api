@@ -10,7 +10,7 @@
 ## ✨ 功能特性
 
 - 🚀 **基于 Cloudflare Workers**：全球分布式网络、低延迟、高性能
-- 🔐 **多渠道**：支持 OpenAI、Azure OpenAI、Claude 等多种 AI 服务商
+- 🔐 **多渠道**：支持 OpenAI、Gemini、Azure OpenAI、Claude 等多种 AI 服务商
 - 🎫 **负载均衡**：支持多KEY/渠道间分配请求，自动重试+自动轮换，确保高可用性
 - 📊 **用量统计<sup>*</sup>**：Analytics Engine 实时统计，精确成本核算与日志回溯
 - 💰 **定价管理**：灵活的模型定价配置
@@ -57,7 +57,7 @@ one-api-workers/
 │   │   └── index.ts              # 管理接口路由
 │   ├── providers/                # AI 服务商
 │   │   ├── azure-openai-proxy.ts # Azure OpenAI 代理
-│   │   ├── openai-proxy.ts       # OpenAI 代理
+│   │   ├── openai-proxy.ts       # OpenAI / Gemini 兼容代理
 │   │   ├── claude-proxy.ts       # Claude 代理
 │   │   ├── openai-responses-proxy.ts # OpenAI Responses 代理
 │   │   ├── azure-openai-responses-proxy.ts # Azure Responses 代理
@@ -286,6 +286,23 @@ curl https://your-domain.com/v1/responses \
 }
 ```
 
+**Gemini 配置**
+
+Gemini 通过官方 OpenAI 兼容层接入，建议将 `endpoint` 配置为 `https://generativelanguage.googleapis.com/v1beta/openai/`。
+
+```json
+{
+  "name": "My Gemini Channel",
+  "type": "gemini",
+  "endpoint": "https://generativelanguage.googleapis.com/v1beta/openai/",
+  "api_key": "AIza-your-gemini-api-key",
+  "deployment_mapper": {
+    "gemini-2.5-flash": "gemini-2.5-flash",
+    "gemini-2.5-pro": "gemini-2.5-pro"
+  }
+}
+```
+
 **Azure OpenAI 配置**
 
 ```json
@@ -348,7 +365,7 @@ curl https://your-domain.com/v1/responses \
 **配置字段说明**：
 
 - `name`: 渠道显示名称
-- `type`: 服务商类型（`openai`、`azure-openai`、`claude`、`openai-responses`、`azure-openai-responses`）
+- `type`: 服务商类型（`openai`、`gemini`、`azure-openai`、`claude`、`openai-responses`、`azure-openai-responses`）
 - `endpoint`: API 端点地址
 - `api_key`: API 密钥
 - `api_version`: API 版本（Azure OpenAI / Claude 可用；Azure Responses v1 请留空）

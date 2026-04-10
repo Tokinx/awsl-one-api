@@ -90,11 +90,12 @@ const buildModelsFetchRequest = (
             headers.set("anthropic-version", DEFAULT_CLAUDE_API_VERSION);
             break;
         case "openai":
+        case "gemini":
         case "openai-audio":
         case "openai-responses":
         case "claude-to-openai":
         default:
-            targetUrl = buildPrefixedTargetUrl(config.endpoint, "/v1/models");
+            targetUrl = buildPrefixedTargetUrl(config.endpoint, "/v1/models", "/v1", config.type);
             headers.set("Authorization", `Bearer ${apiKey}`);
             break;
     }

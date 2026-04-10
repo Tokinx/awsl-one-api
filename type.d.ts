@@ -36,6 +36,7 @@ type ApiTokenRow = BaseDbRow & {
 type ChannelType =
     | "azure-openai"
     | "openai"
+    | "gemini"
     | "azure-openai-audio"
     | "openai-audio"
     | "claude"

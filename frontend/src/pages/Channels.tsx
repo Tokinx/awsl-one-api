@@ -35,12 +35,13 @@ type ModelRow = { id: string; name: string }
 
 const channelTypes = [
   { value: 'openai', label: 'OpenAI' },
+  { value: 'openai-responses', label: 'OpenAI Responses' },
+  { value: 'claude', label: 'Claude' },
+  { value: 'gemini', label: 'Gemini' },
+  { value: 'openai-audio', label: 'OpenAI Audio' },
+  { value: 'claude-to-openai', label: 'Claude → OpenAI' },
   { value: 'azure-openai', label: 'Azure OpenAI' },
   { value: 'azure-openai-audio', label: 'Azure OpenAI Audio' },
-  { value: 'openai-audio', label: 'OpenAI Audio' },
-  { value: 'claude', label: 'Claude' },
-  { value: 'claude-to-openai', label: 'Claude → OpenAI' },
-  { value: 'openai-responses', label: 'OpenAI Responses' },
   { value: 'azure-openai-responses', label: 'Azure OpenAI Responses' },
 ]
 
@@ -283,6 +284,10 @@ const getChannelRequestPreviewPath = (type: string | undefined): string => {
   }
 }
 
+const isGeminiChannelType = (type: string | undefined): boolean => {
+  return type === 'gemini'
+}
+
 const isOpenAIStyleChannelType = (type: string | undefined): boolean => {
   return ['openai', 'openai-audio', 'openai-responses', 'claude-to-openai'].includes(type || '')
 }
@@ -335,9 +340,40 @@ const buildClaudeEndpointPreview = (endpoint: string, requestPath: string): stri
   return buildPrefixedEndpointPreview(endpoint, requestPath)
 }
 
+const buildGeminiEndpointPreview = (endpoint: string, requestPath: string): string => {
+  const targetUrl = new URL(endpoint)
+  const currentBasePath = trimSlashes(targetUrl.pathname)
+  const normalizedRequestPath = requestPath.replace(/^\/v1(?=\/|$)/, '')
+  const geminiBasePath = currentBasePath.endsWith('v1beta/openai')
+    ? currentBasePath
+    : currentBasePath.endsWith('v1beta')
+      ? joinPath(currentBasePath, 'openai')
+      : currentBasePath.endsWith('openai')
+        ? currentBasePath
+        : joinPath(currentBasePath, 'v1beta/openai')
+
+  targetUrl.pathname = joinPath(geminiBasePath, normalizedRequestPath)
+  return targetUrl.toString()
+}
+
 const buildFallbackEndpointPreview = (endpoint: string, requestPath: string): string => {
   const normalizedEndpoint = endpoint.trim().replace(/\/+$/, '')
   return `${normalizedEndpoint}${requestPath}`
+}
+
+const getChannelEndpointPlaceholder = (type: string | undefined): string => {
+  switch (type) {
+    case 'gemini':
+      return 'https://generativelanguage.googleapis.com/v1beta/openai/'
+    case 'azure-openai':
+    case 'azure-openai-audio':
+    case 'azure-openai-responses':
+      return 'https://your-resource.openai.azure.com/'
+    case 'claude':
+      return 'https://api.anthropic.com/v1/'
+    default:
+      return 'https://api.openai.com/v1/'
+  }
 }
 
 const getChannelEndpointPreview = (type: string | undefined, endpoint: string): string => {
@@ -350,6 +386,10 @@ const getChannelEndpointPreview = (type: string | undefined, endpoint: string): 
   try {
     if (type === 'claude') {
       return buildClaudeEndpointPreview(trimmedEndpoint, requestPath)
+    }
+
+    if (isGeminiChannelType(type)) {
+      return buildGeminiEndpointPreview(trimmedEndpoint, requestPath)
     }
 
     if (isAzureChannelType(type)) {
@@ -725,6 +765,7 @@ export function Channels({
     )
   })
   const endpointPreview = getChannelEndpointPreview(formData.type, formData.endpoint)
+  const endpointPlaceholder = getChannelEndpointPlaceholder(formData.type)
 
   if (view === 'list') {
     return (
@@ -772,7 +813,7 @@ export function Channels({
               </div>
               <h3 className="font-semibold text-lg mb-2">添加您的第一个渠道</h3>
               <p className="text-muted-foreground text-sm text-center max-w-sm mb-6">
-                连接到 AI 服务商（如 OpenAI、Azure、Claude），用于代理和转发 API 请求。
+                连接到 AI 服务商（如 OpenAI、Gemini、Azure、Claude），用于代理和转发 API 请求。
               </p>
               <Button onClick={handleAdd} size="lg">
                 <Plus className="h-4 w-4 mr-2" />
@@ -963,7 +1004,7 @@ export function Channels({
                       <Input
                         value={formData.endpoint}
                         onChange={(e) => setFormData({ ...formData, endpoint: e.target.value })}
-                        placeholder="https://your-resource.openai.azure.com/"
+                        placeholder={endpointPlaceholder}
                       />
                       <p className="text-xs text-muted-foreground">
                         预览：{endpointPreview || formData.type}

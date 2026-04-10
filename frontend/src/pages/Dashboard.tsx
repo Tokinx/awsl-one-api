@@ -8,7 +8,7 @@ const features = [
   {
     icon: Globe,
     title: "多渠道支持",
-    description: "支持 OpenAI、Azure OpenAI、Claude 等多种 AI 服务商。",
+    description: "支持 OpenAI、Claude、Gemini、Azure OpenAI 等多种 AI 服务商。",
     gradient: "from-blue-500/10 to-cyan-500/10",
     iconBg: "from-blue-500 to-cyan-500",
     delay: "0ms",
@@ -149,7 +149,7 @@ export function Dashboard() {
         <div className="text-center py-4">
           <p className="text-xs text-muted-foreground/60 uppercase tracking-wider mb-4">支持的服务端点</p>
           <div className="flex items-center justify-center gap-6 flex-wrap text-muted-foreground/40">
-            {["OpenAI", "Azure OpenAI", "Claude", "OpenAI Responses"].map((name) => (
+            {["OpenAI", "OpenAI Responses", "Claude", "Gemini", "Azure OpenAI"].map((name) => (
               <div
                 key={name}
                 className="flex items-center gap-2 text-sm font-medium hover:text-muted-foreground transition-colors"

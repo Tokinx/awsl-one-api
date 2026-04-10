@@ -8,7 +8,7 @@ const buildProxyRequest = (
     config: ChannelConfig
 ): Request => {
     const url = new URL(request.url)
-    const targetUrl = buildPrefixedTargetUrl(config.endpoint, url.pathname)
+    const targetUrl = buildPrefixedTargetUrl(config.endpoint, url.pathname, "/v1", config.type)
     const apiKey = config.api_key || ""
 
     const targetHeaders = new Headers(request.headers)
