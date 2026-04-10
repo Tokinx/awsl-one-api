@@ -45,6 +45,7 @@ export const AutoCompleteInput = React.forwardRef<HTMLInputElement, AutoComplete
       className,
       dropdownClassName,
       inputClassName,
+      onClick,
       onFocus,
       onBlur,
       disabled,
@@ -54,6 +55,7 @@ export const AutoCompleteInput = React.forwardRef<HTMLInputElement, AutoComplete
   ) => {
     const containerRef = React.useRef<HTMLDivElement | null>(null)
     const [isOpen, setIsOpen] = React.useState(false)
+    const [searchQuery, setSearchQuery] = React.useState('')
 
     React.useEffect(() => {
       const handlePointerDown = (event: MouseEvent) => {
@@ -66,7 +68,13 @@ export const AutoCompleteInput = React.forwardRef<HTMLInputElement, AutoComplete
       return () => document.removeEventListener('mousedown', handlePointerDown)
     }, [])
 
-    const query = normalizeText(value)
+    React.useEffect(() => {
+      if (!isOpen) {
+        setSearchQuery('')
+      }
+    }, [isOpen])
+
+    const query = normalizeText(searchQuery)
     const dedupedOptions = options.filter((option, index) => {
       return options.findIndex((candidate) => candidate.value === option.value) === index
     })
@@ -84,7 +92,13 @@ export const AutoCompleteInput = React.forwardRef<HTMLInputElement, AutoComplete
           ref={ref}
           disabled={disabled}
           value={value}
+          onClick={(event) => {
+            setSearchQuery('')
+            setIsOpen(true)
+            onClick?.(event)
+          }}
           onFocus={(event) => {
+            setSearchQuery('')
             setIsOpen(true)
             onFocus?.(event)
           }}
@@ -93,6 +107,7 @@ export const AutoCompleteInput = React.forwardRef<HTMLInputElement, AutoComplete
           }}
           onChange={(event) => {
             onChange(event.target.value)
+            setSearchQuery(event.target.value)
             setIsOpen(true)
           }}
           className={inputClassName}

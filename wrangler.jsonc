@@ -3,9 +3,14 @@
   "name": "one-api-workers",
   "main": "src/index.ts",
   "compatibility_date": "2025-04-28",
-  "workers_dev": false,
-  "vars": {
-    "ADMIN_TOKEN": "CHANGE_ME",
+  "workers_dev": true,
+  "vars": {},
+  "secrets": {
+    "required": [
+      "ADMIN_TOKEN",
+      "CF_API_TOKEN",
+      "CF_ACCOUNT_ID"
+    ]
   },
   "assets": {
     "directory": "./public",
@@ -16,8 +21,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "one-api",
-      "database_id": "00000000-0000-0000-0000-000000000000"
+      "database_name": "one-api-workers",
+      "database_id": ""
     }
   ]
 }

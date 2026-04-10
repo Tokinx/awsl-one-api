@@ -8,7 +8,7 @@
     "dev:web": "bun run --filter frontend dev",
     "dev:worker": "wrangler dev --config wrangler.local.jsonc --local --host localhost",
     "build": "bun run --filter frontend build",
-    "deploy": "bun run build && wrangler deploy --config wrangler.jsonc --minify",
+    "deploy": "bun run build && wrangler deploy --config wrangler.jsonc",
     "cf-typegen": "wrangler types --config wrangler.jsonc --include-env=false"
   },
   "repository": {
