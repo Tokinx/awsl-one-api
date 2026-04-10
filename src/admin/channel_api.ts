@@ -85,7 +85,7 @@ const buildModelsFetchRequest = (
             headers.set("api-key", apiKey);
             break;
         case "claude":
-            targetUrl = new URL("v1/models", config.endpoint);
+            targetUrl = buildPrefixedTargetUrl(config.endpoint, "/v1/models");
             headers.set("x-api-key", apiKey);
             headers.set("anthropic-version", DEFAULT_CLAUDE_API_VERSION);
             break;

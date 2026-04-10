@@ -1,5 +1,6 @@
 import { Context } from "hono"
 import { DEFAULT_CLAUDE_API_VERSION } from "../channel-config"
+import { buildPrefixedTargetUrl } from "./shared/prefixed-target-url"
 
 /**
  * Claude API Proxy Provider
@@ -55,11 +56,8 @@ const buildProxyRequest = (
     config: ChannelConfig
 ): Request => {
     const url = new URL(request.url)
-    const targetUrl = new URL(config.endpoint)
+    const targetUrl = buildPrefixedTargetUrl(config.endpoint, url.pathname)
     const apiKey = config.api_key || ""
-
-    // Claude API uses /v1/messages endpoint
-    targetUrl.pathname = url.pathname
 
     const targetHeaders = new Headers(request.headers)
 

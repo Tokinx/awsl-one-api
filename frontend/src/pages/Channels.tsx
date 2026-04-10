@@ -33,8 +33,8 @@ type ModelEditorMode = 'visual' | 'json'
 type ModelRow = { id: string; name: string }
 
 const channelTypes = [
-  { value: 'azure-openai', label: 'Azure OpenAI' },
   { value: 'openai', label: 'OpenAI' },
+  { value: 'azure-openai', label: 'Azure OpenAI' },
   { value: 'azure-openai-audio', label: 'Azure OpenAI Audio' },
   { value: 'openai-audio', label: 'OpenAI Audio' },
   { value: 'claude', label: 'Claude' },
@@ -50,7 +50,7 @@ const createEmptyModelRow = (): ModelRow => ({
 
 const createDefaultChannelFormData = (): ChannelConfig => ({
   name: '',
-  type: 'azure-openai',
+  type: 'openai',
   endpoint: '',
   api_keys: [],
   auto_retry: true,
@@ -252,6 +252,117 @@ const parseModelsFromJson = (value: string): { models: ChannelModelMapping[]; er
   }
 
   return { models }
+}
+
+const trimSlashes = (value: string): string => value.replace(/^\/+|\/+$/g, '')
+
+const joinPath = (...segments: string[]): string => {
+  const cleanedSegments = segments
+    .map((segment) => trimSlashes(segment))
+    .filter((segment) => segment.length > 0)
+
+  return `/${cleanedSegments.join('/')}`
+}
+
+const getChannelRequestPreviewPath = (type: string | undefined): string => {
+  switch (type) {
+    case 'claude':
+      return '/v1/messages'
+    case 'openai-audio':
+    case 'azure-openai-audio':
+      return '/v1/audio/speech'
+    case 'openai-responses':
+    case 'azure-openai-responses':
+      return '/v1/responses'
+    case 'openai':
+    case 'azure-openai':
+    case 'claude-to-openai':
+    default:
+      return '/v1/chat/completions'
+  }
+}
+
+const isOpenAIStyleChannelType = (type: string | undefined): boolean => {
+  return ['openai', 'openai-audio', 'openai-responses', 'claude-to-openai'].includes(type || '')
+}
+
+const isAzureChannelType = (type: string | undefined): boolean => {
+  return ['azure-openai', 'azure-openai-audio', 'azure-openai-responses'].includes(type || '')
+}
+
+const buildPrefixedEndpointPreview = (
+  endpoint: string,
+  requestPath: string,
+  prefixToStrip = '/v1'
+): string => {
+  const targetUrl = new URL(endpoint)
+  const currentBasePath = trimSlashes(targetUrl.pathname)
+  const normalizedPrefix = trimSlashes(prefixToStrip)
+  const baseAlreadyContainsPrefix =
+    normalizedPrefix.length > 0 && currentBasePath.endsWith(normalizedPrefix)
+  const explicitBasePath = endpoint.endsWith('/')
+
+  let normalizedRequestPath = requestPath
+  if ((baseAlreadyContainsPrefix || explicitBasePath) && normalizedRequestPath.startsWith(prefixToStrip)) {
+    normalizedRequestPath = normalizedRequestPath.slice(prefixToStrip.length)
+  }
+
+  targetUrl.pathname = joinPath(currentBasePath, normalizedRequestPath)
+  return targetUrl.toString()
+}
+
+const buildAzureEndpointPreview = (endpoint: string, requestPath: string): string => {
+  const targetUrl = new URL(endpoint)
+  const currentBasePath = trimSlashes(targetUrl.pathname)
+  const normalizedRequestPath = requestPath.replace(/^\/v1/, '')
+  const explicitBasePath = endpoint.endsWith('/')
+  const azureBasePath = currentBasePath.endsWith('openai/v1')
+    ? currentBasePath
+    : currentBasePath.endsWith('openai')
+      ? explicitBasePath
+        ? currentBasePath
+        : joinPath(currentBasePath, 'v1')
+      : explicitBasePath
+        ? joinPath(currentBasePath, 'openai')
+        : joinPath(currentBasePath, 'openai/v1')
+
+  targetUrl.pathname = joinPath(azureBasePath, normalizedRequestPath)
+  return targetUrl.toString()
+}
+
+const buildClaudeEndpointPreview = (endpoint: string, requestPath: string): string => {
+  return buildPrefixedEndpointPreview(endpoint, requestPath)
+}
+
+const buildFallbackEndpointPreview = (endpoint: string, requestPath: string): string => {
+  const normalizedEndpoint = endpoint.trim().replace(/\/+$/, '')
+  return `${normalizedEndpoint}${requestPath}`
+}
+
+const getChannelEndpointPreview = (type: string | undefined, endpoint: string): string => {
+  const trimmedEndpoint = endpoint.trim()
+  const requestPath = getChannelRequestPreviewPath(type)
+  if (!trimmedEndpoint) {
+    return requestPath;
+  }
+
+  try {
+    if (type === 'claude') {
+      return buildClaudeEndpointPreview(trimmedEndpoint, requestPath)
+    }
+
+    if (isAzureChannelType(type)) {
+      return buildAzureEndpointPreview(trimmedEndpoint, requestPath)
+    }
+
+    if (isOpenAIStyleChannelType(type)) {
+      return buildPrefixedEndpointPreview(trimmedEndpoint, requestPath)
+    }
+  } catch {
+    return buildFallbackEndpointPreview(trimmedEndpoint, requestPath)
+  }
+
+  return buildFallbackEndpointPreview(trimmedEndpoint, requestPath)
 }
 
 export function Channels() {
@@ -561,6 +672,7 @@ export function Channels() {
       channel.key.toLowerCase().includes(searchQuery.toLowerCase())
     )
   })
+  const endpointPreview = getChannelEndpointPreview(formData.type, formData.endpoint)
 
   if (view === 'list') {
     return (
@@ -788,6 +900,9 @@ export function Channels() {
                         onChange={(e) => setFormData({ ...formData, endpoint: e.target.value })}
                         placeholder="https://your-resource.openai.azure.com/"
                       />
+                      <p className="text-xs text-muted-foreground">
+                        预览：{endpointPreview || formData.type}
+                      </p>
                     </div>
                     <div className="space-y-2">
                       <Label className="text-sm">API 密钥 <span className="text-destructive">*</span></Label>

@@ -30,9 +30,16 @@ export const buildAzureTargetUrlFromPath = (
 
     const requestPath = path.replace(/^\/v1/, "");
     const currentBasePath = trimSlashes(targetUrl.pathname);
+    const explicitBasePath = endpoint.endsWith("/");
     const azureBasePath = currentBasePath.endsWith("openai/v1")
         ? currentBasePath
-        : joinPath(currentBasePath, "openai/v1");
+        : currentBasePath.endsWith("openai")
+            ? explicitBasePath
+                ? currentBasePath
+                : joinPath(currentBasePath, "v1")
+            : explicitBasePath
+                ? joinPath(currentBasePath, "openai")
+                : joinPath(currentBasePath, "openai/v1");
 
     targetUrl.pathname = joinPath(azureBasePath, requestPath);
 

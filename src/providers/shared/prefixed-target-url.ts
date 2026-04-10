@@ -25,9 +25,10 @@ export const buildPrefixedTargetUrl = (
     const normalizedPrefix = trimSlashes(prefixToStrip);
     const baseAlreadyContainsPrefix = normalizedPrefix.length > 0
         && currentBasePath.endsWith(normalizedPrefix);
+    const explicitBasePath = endpoint.endsWith("/");
 
     let normalizedRequestPath = requestPath;
-    if (baseAlreadyContainsPrefix && normalizedRequestPath.startsWith(prefixToStrip)) {
+    if ((baseAlreadyContainsPrefix || explicitBasePath) && normalizedRequestPath.startsWith(prefixToStrip)) {
         normalizedRequestPath = normalizedRequestPath.slice(prefixToStrip.length);
     }
 
