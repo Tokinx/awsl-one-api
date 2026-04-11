@@ -91,7 +91,7 @@ export function Sidebar({
         onClick={() => onNavigate?.()}
         title={collapsed ? item.title : undefined}
         className={cn(
-          "group relative flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150",
+          "group relative flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-all duration-150",
           collapsed && "justify-center px-0 w-10 h-10 mx-auto",
           isActive
             ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20"
@@ -128,7 +128,7 @@ export function Sidebar({
         ) : (
           <>
             <div className="w-full flex items-center justify-center gap-2.5">
-                <span className="font-semibold text-[14px] tracking-tight leading-tight">One API on Workers</span>
+              <span className="font-semibold text-[14px] tracking-tight leading-tight">One API on Workers</span>
             </div>
             {onClose && (
               <button
@@ -195,7 +195,9 @@ export function Sidebar({
                 onClick={onToggleCollapse}
                 className={cn(
                   "flex items-center justify-center rounded-md transition-colors duration-150",
-                  collapsed ? "w-10 h-9 hover:bg-muted text-muted-foreground hover:text-foreground" : "flex-1 h-8 gap-1.5 px-2.5 hover:bg-muted/70 text-muted-foreground hover:text-foreground text-[11px] font-medium",
+                  collapsed
+                    ? "w-10 h-9 hover:bg-muted text-muted-foreground hover:text-foreground"
+                    : "flex-1 h-8 gap-1.5 px-2.5 hover:bg-muted/70 text-muted-foreground hover:text-foreground text-[11px] font-medium",
                 )}
               >
                 {collapsed ? (
@@ -216,7 +218,7 @@ export function Sidebar({
           type="button"
           title={collapsed ? "退出登录" : undefined}
           className={cn(
-            "flex items-center justify-center gap-2 w-full rounded-lg text-[13px] font-medium transition-all duration-150",
+            "flex items-center justify-center gap-2 w-full rounded-md text-[13px] font-medium transition-all duration-150",
             collapsed ? "h-9" : "h-9 px-3",
             "bg-destructive/8 text-destructive hover:bg-destructive/15",
           )}

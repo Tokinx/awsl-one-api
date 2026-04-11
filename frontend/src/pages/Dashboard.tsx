@@ -71,7 +71,7 @@ export function Dashboard() {
               <Button
                 size="lg"
                 onClick={openAuthModal}
-                className="h-12 px-6 text-[15px] rounded-xl shadow-lg shadow-primary/20"
+                className="h-12 px-6 text-[15px] shadow-lg shadow-primary/20"
               >
                 管理员登录
                 <ArrowRight className="h-4 w-4 ml-1" />

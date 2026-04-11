@@ -44,17 +44,17 @@ export function BreakdownChartCard({
       <CardContent className="space-y-3">
         {isLoading ? (
           Array.from({ length: 4 }, (_, index) => (
-            <div key={index} className="rounded-2xl border bg-muted/20 p-3 animate-pulse">
-              <div className="h-4 w-1/3 rounded bg-muted" />
+            <div key={index} className="animate-pulse">
+              <div className="h-4 w-1/3 bg-muted" />
               <div className="mt-3 h-2 rounded-full bg-muted" />
             </div>
           ))
         ) : isError ? (
-          <div className="rounded-2xl border border-dashed bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
+          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
             排行数据加载失败
           </div>
         ) : visibleItems.length === 0 ? (
-          <div className="rounded-2xl border border-dashed bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
+          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
             当前时间范围暂无维度排行数据
           </div>
         ) : (
@@ -94,9 +94,9 @@ export function BreakdownChartCard({
                   </div>
                 </div>
 
-                <div className="mt-2 h-2 bg-muted/60">
+                <div className="mt-2 h-0.5 bg-muted">
                   <div
-                    className={cn("h-2 bg-gradient-to-r from-primary to-primary/50", barClassName)}
+                    className={cn("h-2 -translate-y-0.75 bg-gradient-to-r from-primary to-primary/50 -skew-x-12", barClassName)}
                     style={{ width: `${width}%` }}
                   />
                 </div>

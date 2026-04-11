@@ -10,7 +10,7 @@
   --color-popover-foreground: hsl(224 71% 4%);
 
   /* Primary - Vibrant indigo */
-  --color-primary: hsl(234 89% 60%);
+  --color-primary: #242424;
   --color-primary-foreground: hsl(0 0% 100%);
 
   /* Secondary */

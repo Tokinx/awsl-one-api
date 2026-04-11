@@ -32,11 +32,11 @@ const BREAKDOWN_CHARTS: Array<{
   badgeClassName: string;
 }> = [
   {
-    dimension: "token",
-    title: "令牌排行",
-    description: "按成本优先排序，识别最活跃的访问凭证。",
-    barClassName: "from-sky-500 to-cyan-400",
-    badgeClassName: "bg-sky-500/12 text-sky-600 dark:text-sky-400",
+    dimension: "model",
+    title: "模型排行",
+    description: "看清哪些模型是主要成本与流量入口。",
+    barClassName: "from-amber-500 to-orange-400",
+    badgeClassName: "bg-amber-500/12 text-amber-700 dark:text-amber-400",
   },
   {
     dimension: "channel",
@@ -46,11 +46,11 @@ const BREAKDOWN_CHARTS: Array<{
     badgeClassName: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400",
   },
   {
-    dimension: "model",
-    title: "模型排行",
-    description: "看清哪些模型是主要成本与流量入口。",
-    barClassName: "from-amber-500 to-orange-400",
-    badgeClassName: "bg-amber-500/12 text-amber-700 dark:text-amber-400",
+    dimension: "token",
+    title: "令牌排行",
+    description: "按成本优先排序，识别最活跃的访问凭证。",
+    barClassName: "from-sky-500 to-cyan-400",
+    badgeClassName: "bg-sky-500/12 text-sky-600 dark:text-sky-400",
   },
   {
     dimension: "provider",
@@ -75,15 +75,6 @@ const formatDuration = (value: number): string => {
     return `${(value / 1000).toFixed(1)} s`;
   }
   return `${Math.round(value)} ms`;
-};
-
-const EmptyState = ({ title, description }: { title: string; description: string }) => {
-  return (
-    <div className="rounded-xl border border-dashed bg-muted/20 px-4 py-10 text-center">
-      <p className="text-sm font-medium">{title}</p>
-      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-    </div>
-  );
 };
 
 export function Analytics() {
@@ -253,7 +244,10 @@ export function Analytics() {
         </div>
 
         {!trend || trend.points.length === 0 ? (
-          <EmptyState title="暂无趋势数据" description="写入第一批使用事件后，这里会展示完整柱状趋势。" />
+          <Card className="border-0 flex flex-col items-center justify-center py-16">
+            <p className="text-sm font-medium">暂无趋势数据</p>
+            <p className="mt-1 text-sm text-muted-foreground">写入第一批使用事件后，这里会展示完整柱状趋势。</p>
+          </Card>
         ) : (
           <TrendBarChart points={trend.points} range={range} />
         )}

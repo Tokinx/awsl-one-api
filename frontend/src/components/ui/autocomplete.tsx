@@ -116,7 +116,7 @@ export const AutoCompleteInput = React.forwardRef<HTMLInputElement, AutoComplete
         {isOpen && !disabled && (
           <div
             className={cn(
-              'absolute z-20 mt-1 w-full overflow-hidden rounded-lg border bg-popover shadow-lg',
+              'absolute z-20 mt-1 w-full overflow-hidden rounded-md border bg-popover shadow-lg',
               dropdownClassName
             )}
           >
