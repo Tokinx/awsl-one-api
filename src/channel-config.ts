@@ -1,10 +1,12 @@
 export const DEFAULT_CHANNEL_AUTO_RETRY = true;
 export const DEFAULT_CHANNEL_AUTO_ROTATE = true;
+export const DEFAULT_CHANNEL_ENABLED = true;
 export const DEFAULT_CLAUDE_API_VERSION = "2023-06-01";
 export const MAX_RETRIES_PER_KEY = 3;
 export const MAX_ROTATION_ATTEMPTS = 3;
 
-export type NormalizedChannelConfig = Omit<ChannelConfig, "api_keys" | "auto_retry" | "auto_rotate" | "models" | "supported_models" | "deployment_mapper"> & {
+export type NormalizedChannelConfig = Omit<ChannelConfig, "enabled" | "api_keys" | "auto_retry" | "auto_rotate" | "models" | "supported_models" | "deployment_mapper"> & {
+    enabled: boolean;
     api_keys: string[];
     auto_retry: boolean;
     auto_rotate: boolean;
@@ -105,6 +107,7 @@ export const normalizeChannelConfig = (
         name: config.name || "",
         type: config.type,
         endpoint: config.endpoint || "",
+        enabled: config.enabled ?? DEFAULT_CHANNEL_ENABLED,
         api_key: typeof config.api_key === "string" ? config.api_key.trim() : undefined,
         api_keys: normalizeApiKeys(config),
         auto_retry: config.auto_retry ?? DEFAULT_CHANNEL_AUTO_RETRY,
@@ -125,6 +128,7 @@ export const sanitizeChannelConfig = (
         name: normalized.name,
         type: normalized.type,
         endpoint: normalized.endpoint,
+        enabled: normalized.enabled,
         api_keys: normalized.api_keys,
         auto_retry: normalized.auto_retry,
         auto_rotate: normalized.auto_rotate,

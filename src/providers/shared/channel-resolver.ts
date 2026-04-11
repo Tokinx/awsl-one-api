@@ -60,6 +60,7 @@ export const resolveChannel = async (
     const allowedTypes = policy.allowedTypes;
 
     const availableChannels: Array<{ key: string, config: ChannelConfig, mapping: ChannelModelMapping }> = [];
+    let hasDisabledMatchingChannel = false;
 
     for (const row of channelsResult.results) {
         const config = (() => {
@@ -83,6 +84,11 @@ export const resolveChannel = async (
             continue;
         }
 
+        if (!config.enabled) {
+            hasDisabledMatchingChannel = true;
+            continue;
+        }
+
         availableChannels.push({
             key: row.key,
             config: config,
@@ -91,6 +97,9 @@ export const resolveChannel = async (
     }
 
     if (availableChannels.length === 0) {
+        if (hasDisabledMatchingChannel) {
+            return c.text(`No enabled channels available for model: ${requestedModel}. Please enable a channel first.`, 503);
+        }
         return c.text(`Model not supported: ${requestedModel}. Please configure models.`, 400);
     }
 

@@ -75,6 +75,19 @@ const createFilterPreset = (hoursBack: number): UsageLogFilterState => {
   };
 };
 
+const hydrateUsageLogFilters = (
+  filters: UsageLogFilterState | undefined,
+  latestWindow: UsageLogFilterState,
+): UsageLogFilterState => {
+  return {
+    start: latestWindow.start,
+    end: latestWindow.end,
+    dimension: filters?.dimension ?? latestWindow.dimension,
+    keyword: filters?.keyword ?? latestWindow.keyword,
+    result: filters?.result ?? latestWindow.result,
+  };
+};
+
 const formatDateTime = (value: string): string => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -157,13 +170,21 @@ const DetailField = ({ label, value, mono = false }: { label: string; value: str
 export function UsageLogs() {
   const defaultFilters = useMemo(() => createFilterPreset(24), []);
   const cachedLogsSnapshot = useMemo(() => readScopedCache<UsageLogPageCacheSnapshot>(USAGE_LOGS_PAGE_CACHE_KEY), []);
+  const initialDraftFilters = useMemo(
+    () => hydrateUsageLogFilters(cachedLogsSnapshot?.data.draftFilters, defaultFilters),
+    [cachedLogsSnapshot, defaultFilters],
+  );
+  const initialAppliedFilters = useMemo(
+    () => hydrateUsageLogFilters(cachedLogsSnapshot?.data.appliedFilters, defaultFilters),
+    [cachedLogsSnapshot, defaultFilters],
+  );
   const [draftFilters, setDraftFilters] = useState<UsageLogFilterState>(
-    () => cachedLogsSnapshot?.data.draftFilters ?? defaultFilters,
+    () => initialDraftFilters,
   );
   const [appliedFilters, setAppliedFilters] = useState<UsageLogFilterState>(
-    () => cachedLogsSnapshot?.data.appliedFilters ?? defaultFilters,
+    () => initialAppliedFilters,
   );
-  const [currentPage, setCurrentPage] = useState(() => Math.max(cachedLogsSnapshot?.data.currentPage ?? 1, 1));
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedItem, setSelectedItem] = useState<AnalyticsEventItem | null>(null);
   const initialLogsData =
     cachedLogsSnapshot?.data &&

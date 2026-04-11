@@ -29,6 +29,10 @@ export const parseChannelConfig = (channel: Channel): ChannelConfig => {
   }
 }
 
+export const isChannelEnabled = (config: ChannelConfig): boolean => {
+  return config.enabled !== false
+}
+
 export const parseTokenConfig = (token: Token): TokenConfig => {
   if (typeof token.value !== 'string') {
     return token.value
@@ -92,6 +96,9 @@ export const getUniqueModelNamesFromChannels = (channels: Channel[]): string[] =
 
   channels.forEach((channel) => {
     const config = parseChannelConfig(channel)
+    if (!isChannelEnabled(config)) {
+      return
+    }
     getChannelModels(config).forEach((model) => modelNames.add(model.name))
   })
 

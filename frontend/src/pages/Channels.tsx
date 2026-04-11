@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 import { useToast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
 import {
@@ -54,6 +55,7 @@ const createDefaultChannelFormData = (): ChannelConfig => ({
   name: '',
   type: 'openai',
   endpoint: '',
+  enabled: true,
   api_keys: [],
   auto_retry: true,
   auto_rotate: true,
@@ -150,6 +152,7 @@ const normalizeChannelFormConfig = (config: ChannelConfig): ChannelConfig => {
   return {
     ...config,
     api_key: undefined,
+    enabled: config.enabled ?? true,
     api_keys: mergedKeys,
     auto_retry: config.auto_retry ?? true,
     auto_rotate: config.auto_rotate ?? true,
@@ -157,6 +160,22 @@ const normalizeChannelFormConfig = (config: ChannelConfig): ChannelConfig => {
     supported_models: undefined,
     deployment_mapper: undefined,
   }
+}
+
+const parseChannelValue = (channel: Channel): ChannelConfig => {
+  if (typeof channel.value !== 'string') {
+    return channel.value
+  }
+
+  try {
+    return JSON.parse(channel.value) as ChannelConfig
+  } catch {
+    return createDefaultChannelFormData()
+  }
+}
+
+const buildChannelValue = (source: Channel['value'], config: ChannelConfig): Channel['value'] => {
+  return typeof source === 'string' ? JSON.stringify(config) : config
 }
 
 const isEmptyModelRow = (row: ModelRow): boolean => {
@@ -458,7 +477,7 @@ export function Channels({
   const openChannelForEdit = useCallback((channel: Channel) => {
     setEditingKey(channel.key)
     setChannelKey(channel.key)
-    const rawConfig = typeof channel.value === 'string' ? JSON.parse(channel.value) : channel.value
+    const rawConfig = parseChannelValue(channel)
     const normalizedConfig = loadFormConfig(rawConfig)
     setJsonValue(JSON.stringify(normalizedConfig, null, 2))
     setView('form')
@@ -502,6 +521,49 @@ export function Channels({
     },
     onError: (error: Error) => {
       addToast('删除失败：' + error.message, 'error')
+    },
+  })
+
+  const toggleEnabledMutation = useMutation({
+    mutationFn: async ({ channel, enabled }: { channel: Channel; enabled: boolean }) => {
+      const config = normalizeChannelFormConfig(parseChannelValue(channel))
+      return apiClient.saveChannel(channel.key, { ...config, enabled })
+    },
+    onMutate: async ({ channel, enabled }) => {
+      await queryClient.cancelQueries({ queryKey: ['channels'] })
+      const previousChannels = queryClient.getQueryData<Channel[]>(['channels'])
+
+      queryClient.setQueryData<Channel[]>(['channels'], (current) => {
+        if (!current) {
+          return current
+        }
+
+        return current.map((item) => {
+          if (item.key !== channel.key) {
+            return item
+          }
+
+          const config = normalizeChannelFormConfig(parseChannelValue(item))
+          return {
+            ...item,
+            value: buildChannelValue(item.value, { ...config, enabled }),
+          }
+        })
+      })
+
+      return { previousChannels }
+    },
+    onSuccess: (_, { enabled }) => {
+      addToast(enabled ? '渠道已启用' : '渠道已停用', 'success')
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previousChannels) {
+        queryClient.setQueryData(['channels'], context.previousChannels)
+      }
+      addToast('更新渠道状态失败：' + error.message, 'error')
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['channels'] })
     },
   })
 
@@ -586,6 +648,10 @@ export function Channels({
     if (confirm('确定要删除此渠道吗？')) {
       deleteMutation.mutate(key)
     }
+  }
+
+  const handleToggleEnabled = (channel: Channel, enabled: boolean) => {
+    toggleEnabledMutation.mutate({ channel, enabled })
   }
 
   const handleFetchModels = () => {
@@ -757,7 +823,7 @@ export function Channels({
 
   const filteredData = data?.filter((channel) => {
     if (!searchQuery) return true
-    const rawConfig = typeof channel.value === 'string' ? JSON.parse(channel.value) : channel.value
+    const rawConfig = parseChannelValue(channel)
     const config = normalizeChannelFormConfig(rawConfig)
     return (
       config.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -825,10 +891,12 @@ export function Channels({
           <Card>
             <div className="divide-y">
               {filteredData?.map((channel) => {
-                const rawConfig = typeof channel.value === 'string' ? JSON.parse(channel.value) : channel.value
+                const rawConfig = parseChannelValue(channel)
                 const config = normalizeChannelFormConfig(rawConfig)
                 const modelCount = (config.models || []).length
                 const isMenuOpen = openMenu === channel.key
+                const isEnabled = config.enabled !== false
+                const isToggling = toggleEnabledMutation.isPending && toggleEnabledMutation.variables?.channel.key === channel.key
 
                 return (
                   <div key={channel.key} className="p-4 hover:bg-muted/30 transition-colors">
@@ -876,6 +944,25 @@ export function Channels({
                         </span>
                         <span className="text-muted-foreground">{modelCount} 个模型</span>
                       </div>
+                      <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2">
+                        <div>
+                          <div className="text-sm font-medium">运行状态</div>
+                          <div
+                            className={cn(
+                              'mt-1 text-xs font-medium',
+                              isEnabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
+                            )}
+                          >
+                            {isEnabled ? '已启用' : '已停用'}
+                          </div>
+                        </div>
+                        <Switch
+                          checked={isEnabled}
+                          disabled={isToggling}
+                          onCheckedChange={(checked) => handleToggleEnabled(channel, checked)}
+                          aria-label={`${config.name || channel.key} 渠道启用开关`}
+                        />
+                      </div>
                     </div>
 
                     <div className="hidden md:flex md:items-center md:gap-4">
@@ -883,7 +970,7 @@ export function Channels({
                         <div className="font-medium">{config.name}</div>
                         <div className="text-xs text-muted-foreground font-mono">{channel.key}</div>
                       </div>
-                      <div className="flex-shrink-0">
+                      <div className="flex items-center">
                         <span className="px-2 py-1 rounded-md bg-muted text-muted-foreground text-xs font-medium whitespace-nowrap">
                           {getTypeLabel(config.type)}
                         </span>
@@ -893,6 +980,22 @@ export function Channels({
                       </div>
                       <div className="w-20 text-sm text-center flex-shrink-0">
                         <span className="text-muted-foreground">{modelCount} 模型</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 flex-shrink-0">
+                        <span
+                          className={cn(
+                            'text-xs font-medium whitespace-nowrap',
+                            isEnabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
+                          )}
+                        >
+                          {isEnabled ? '已启用' : '已停用'}
+                        </span>
+                        <Switch
+                          checked={isEnabled}
+                          disabled={isToggling}
+                          onCheckedChange={(checked) => handleToggleEnabled(channel, checked)}
+                          aria-label={`${config.name || channel.key} 渠道启用开关`}
+                        />
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <Button variant="ghost" size="sm" onClick={() => handleEdit(channel)}>
@@ -987,6 +1090,33 @@ export function Channels({
                           </option>
                         ))}
                       </Select>
+                    </div>
+                    <div className="rounded-lg border bg-muted/20 px-4 py-3 md:col-span-2">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <Label className="text-sm">渠道状态</Label>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            停用后不会参与请求选路，也不会出现在可用模型列表中。
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={cn(
+                              'text-sm font-medium',
+                              formData.enabled !== false
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : 'text-amber-600 dark:text-amber-400',
+                            )}
+                          >
+                            {formData.enabled !== false ? '已启用' : '已停用'}
+                          </span>
+                          <Switch
+                            checked={formData.enabled !== false}
+                            onCheckedChange={(checked) => setFormData({ ...formData, enabled: checked })}
+                            aria-label="渠道状态开关"
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -1150,7 +1280,7 @@ export function Channels({
                   onChange={(e) => setJsonValue(e.target.value)}
                   rows={18}
                   className="font-mono text-sm"
-                  placeholder='{"name":"Azure OpenAI","type":"azure-openai","endpoint":"https://example.openai.azure.com/","api_keys":["sk-1","sk-2"],"auto_retry":true,"auto_rotate":true,"models":[{"id":"gpt-4.1-mini","name":"gpt-4.1-mini"}]}'
+                  placeholder='{"name":"Azure OpenAI","type":"azure-openai","endpoint":"https://example.openai.azure.com/","enabled":true,"api_keys":["sk-1","sk-2"],"auto_retry":true,"auto_rotate":true,"models":[{"id":"gpt-4.1-mini","name":"gpt-4.1-mini"}]}'
                 />
               </CardContent>
             </Card>

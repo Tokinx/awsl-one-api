@@ -13,6 +13,7 @@ export interface ChannelConfig {
   name: string
   type: 'openai' | 'gemini' | 'azure-openai' | 'openai-audio' | 'azure-openai-audio' | 'claude' | 'claude-to-openai' | 'openai-responses' | 'azure-openai-responses'
   endpoint: string
+  enabled?: boolean
   api_key?: string
   api_keys?: string[]
   auto_retry?: boolean

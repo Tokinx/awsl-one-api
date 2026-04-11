@@ -59,6 +59,9 @@ export class ModelsEndpoint extends OpenAPIRoute {
 
         for (const row of channelsResult.results) {
             const config = normalizeChannelConfig(JSON.parse(row.value) as ChannelConfig);
+            if (!config.enabled) {
+                continue;
+            }
             for (const model of getChannelModels(config)) {
                 modelsSet.add(model.name);
             }
