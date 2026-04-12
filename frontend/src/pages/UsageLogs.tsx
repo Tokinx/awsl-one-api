@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { readScopedCache, writeScopedCache } from "@/lib/local-cache";
 import { cn, formatCurrency, parseUtcTimestamp } from "@/lib/utils";
-import { Eye, RefreshCw, RotateCcw, Search } from "lucide-react";
+import { Eye, RefreshCw, Search } from "lucide-react";
 
 type UsageLogFilterState = {
   range: AnalyticsRange;
@@ -251,15 +251,6 @@ export function UsageLogs() {
     });
   };
 
-  const handleReset = () => {
-    const preset = createFilterPreset("24h");
-    setDraftFilters(preset);
-    startTransition(() => {
-      setCurrentPage(1);
-      setAppliedFilters(preset);
-    });
-  };
-
   const handlePageChange = (page: number) => {
     if (page < 1 || page === activePage || (totalPages > 0 && page > totalPages)) {
       return;
@@ -381,9 +372,6 @@ export function UsageLogs() {
                 <Button onClick={handleSearch}>
                   <Search className="h-4 w-4" />
                   查询
-                </Button>
-                <Button variant="outline" onClick={handleReset}>
-                  <RotateCcw className="h-4 w-4" />
                 </Button>
               </div>
             </div>
