@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { apiClient } from "@/api/client";
@@ -11,6 +11,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 import {
@@ -32,7 +33,8 @@ import { PageContainer } from "@/components/ui/page-container";
 
 type EditMode = "form" | "json";
 type ModelEditorMode = "visual" | "json";
-type ModelRow = { id: string; name: string };
+type ModelRow = { id: string; name: string; enabled: boolean };
+type FetchedModelCandidate = { id: string; label: string };
 
 const channelTypes = [
   { value: "openai", label: "OpenAI" },
@@ -54,6 +56,7 @@ const channelWeightOptions = Array.from({ length: 6 }, (_, weight) => ({
 const createEmptyModelRow = (): ModelRow => ({
   id: "",
   name: "",
+  enabled: true,
 });
 
 const createDefaultChannelFormData = (): ChannelConfig => ({
@@ -105,11 +108,13 @@ const normalizeModels = (models?: ChannelModelMapping[]): ChannelModelMapping[] 
     .map((model) => ({
       id: typeof model?.id === "string" ? model.id.trim() : "",
       name: typeof model?.name === "string" ? model.name.trim() : "",
+      enabled: model?.enabled !== false,
     }))
     .filter((model) => model.id.length > 0)
     .map((model) => ({
       id: model.id,
       name: model.name || model.id,
+      enabled: model.enabled,
     }));
 };
 
@@ -124,7 +129,7 @@ const getChannelModels = (config: ChannelConfig): ChannelModelMapping[] => {
   const legacyModels: ChannelModelMapping[] = [];
   const seenNames = new Set<string>();
 
-  const pushModel = (id: string, name?: string) => {
+  const pushModel = (id: string, name?: string, enabled = true) => {
     const normalizedId = id.trim();
     const normalizedName = (name || id).trim();
 
@@ -136,6 +141,7 @@ const getChannelModels = (config: ChannelConfig): ChannelModelMapping[] => {
     legacyModels.push({
       id: normalizedId,
       name: normalizedName,
+      enabled,
     });
   };
 
@@ -203,7 +209,13 @@ const ensureTrailingEmptyModelRow = (rows: ModelRow[]): ModelRow[] => {
 };
 
 const buildRowsFromModels = (models: ChannelModelMapping[]): ModelRow[] => {
-  return ensureTrailingEmptyModelRow(models.map((model) => ({ id: model.id, name: model.name })));
+  return ensureTrailingEmptyModelRow(
+    models.map((model) => ({
+      id: model.id,
+      name: model.name,
+      enabled: model.enabled !== false,
+    })),
+  );
 };
 
 const serializeModels = (models: ChannelModelMapping[]): string => {
@@ -238,7 +250,7 @@ const parseModelsFromRows = (rows: ModelRow[]): { models: ChannelModelMapping[];
   const models = activeRows.map((row) => {
     const id = row.id.trim();
     const name = row.name.trim() || id;
-    return { id, name };
+    return { id, name, enabled: row.enabled !== false };
   });
 
   const validationError = validateModels(models);
@@ -280,6 +292,7 @@ const parseModelsFromJson = (value: string): { models: ChannelModelMapping[]; er
     models.push({
       id,
       name: rawName || id,
+      enabled: (item as ChannelModelMapping).enabled !== false,
     });
   }
 
@@ -289,6 +302,40 @@ const parseModelsFromJson = (value: string): { models: ChannelModelMapping[]; er
   }
 
   return { models };
+};
+
+const normalizeFetchedModelCandidates = (models: ChannelModelMapping[]): FetchedModelCandidate[] => {
+  const candidates: FetchedModelCandidate[] = [];
+  const seenIds = new Set<string>();
+
+  models.forEach((model) => {
+    const id = typeof model.id === "string" ? model.id.trim() : "";
+    const label = typeof model.name === "string" ? model.name.trim() : "";
+
+    if (!id || seenIds.has(id)) {
+      return;
+    }
+
+    seenIds.add(id);
+    candidates.push({
+      id,
+      label: label || id,
+    });
+  });
+
+  return candidates;
+};
+
+const buildInitialFetchedModelSelection = (
+  candidates: FetchedModelCandidate[],
+  currentModels: ChannelModelMapping[],
+): string[] => {
+  const currentModelIds = new Set(currentModels.map((model) => model.id));
+  const matchedIds = candidates
+    .filter((candidate) => currentModelIds.has(candidate.id))
+    .map((candidate) => candidate.id);
+
+  return matchedIds.length > 0 ? matchedIds : candidates.map((candidate) => candidate.id);
 };
 
 const trimSlashes = (value: string): string => value.replace(/^\/+|\/+$/g, "");
@@ -450,6 +497,10 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
   const [modelJsonValue, setModelJsonValue] = useState("[]");
   const [searchQuery, setSearchQuery] = useState("");
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [isFetchedModelsDialogOpen, setIsFetchedModelsDialogOpen] = useState(false);
+  const [fetchedModelCandidates, setFetchedModelCandidates] = useState<FetchedModelCandidate[]>([]);
+  const [selectedFetchedModelIds, setSelectedFetchedModelIds] = useState<string[]>([]);
+  const [fetchedModelsSearchQuery, setFetchedModelsSearchQuery] = useState("");
 
   const { addToast } = useToast();
   const queryClient = useQueryClient();
@@ -463,6 +514,11 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
 
   const resolveCurrentModels = (): { models: ChannelModelMapping[]; error?: string } => {
     return modelEditorMode === "visual" ? parseModelsFromRows(modelRows) : parseModelsFromJson(modelJsonValue);
+  };
+
+  const getCurrentConfiguredModels = (): ChannelModelMapping[] => {
+    const result = resolveCurrentModels();
+    return result.error ? normalizeModels(formData.models) : result.models;
   };
 
   const loadFormConfig = (config: ChannelConfig) => {
@@ -573,12 +629,17 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
       return apiClient.fetchChannelModels(config);
     },
     onSuccess: (response) => {
-      const fetchedModels = ((response.data as ChannelModelMapping[]) || []).map((model) => ({
-        id: model.id,
-        name: model.id,
-      }));
-      applyModels(fetchedModels);
-      addToast(`已获取 ${fetchedModels.length} 个模型`, "success");
+      const candidates = normalizeFetchedModelCandidates((response.data as ChannelModelMapping[]) || []);
+      if (candidates.length === 0) {
+        addToast("未获取到可选模型", "error");
+        return;
+      }
+
+      const currentModels = getCurrentConfiguredModels();
+      setFetchedModelCandidates(candidates);
+      setSelectedFetchedModelIds(buildInitialFetchedModelSelection(candidates, currentModels));
+      setFetchedModelsSearchQuery("");
+      setIsFetchedModelsDialogOpen(true);
     },
     onError: (error: Error) => {
       addToast("获取模型失败：" + error.message, "error");
@@ -593,6 +654,10 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
     setModelRows([createEmptyModelRow()]);
     setModelJsonValue("[]");
     setModelEditorMode("visual");
+    setIsFetchedModelsDialogOpen(false);
+    setFetchedModelCandidates([]);
+    setSelectedFetchedModelIds([]);
+    setFetchedModelsSearchQuery("");
     setEditingKey(null);
     setEditMode("form");
   }, []);
@@ -669,6 +734,51 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
     });
 
     fetchModelsMutation.mutate(config);
+  };
+
+  const filteredFetchedModelCandidates = useMemo(() => {
+    const query = fetchedModelsSearchQuery.trim().toLowerCase();
+    if (!query) {
+      return fetchedModelCandidates;
+    }
+
+    return fetchedModelCandidates.filter((candidate) =>
+      `${candidate.id} ${candidate.label}`.toLowerCase().includes(query),
+    );
+  }, [fetchedModelCandidates, fetchedModelsSearchQuery]);
+
+  const toggleFetchedModelSelection = (modelId: string, checked: boolean) => {
+    setSelectedFetchedModelIds((current) => {
+      if (checked) {
+        return current.includes(modelId) ? current : [...current, modelId];
+      }
+
+      return current.filter((item) => item !== modelId);
+    });
+  };
+
+  const handleApplyFetchedModels = () => {
+    const selectedIdSet = new Set(selectedFetchedModelIds);
+    const currentModelsById = new Map(getCurrentConfiguredModels().map((model) => [model.id, model]));
+    const selectedModels = fetchedModelCandidates
+      .filter((candidate) => selectedIdSet.has(candidate.id))
+      .map(
+        (candidate) =>
+          currentModelsById.get(candidate.id) || {
+            id: candidate.id,
+            name: candidate.id,
+            enabled: true,
+          },
+      );
+
+    if (selectedModels.length === 0) {
+      addToast("请至少选择一个模型", "error");
+      return;
+    }
+
+    applyModels(selectedModels);
+    setIsFetchedModelsDialogOpen(false);
+    addToast(`已写入 ${selectedModels.length} 个模型`, "success");
   };
 
   const handleSave = () => {
@@ -895,6 +1005,9 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                 const rawConfig = parseChannelValue(channel);
                 const config = normalizeChannelFormConfig(rawConfig);
                 const modelCount = (config.models || []).length;
+                const enabledModelCount = (config.models || []).filter((model) => model.enabled !== false).length;
+                const modelSummary =
+                  enabledModelCount === modelCount ? `${modelCount} 个模型` : `${enabledModelCount}/${modelCount} 启用`;
                 const isMenuOpen = openMenu === channel.key;
                 const isEnabled = config.enabled !== false;
                 const isToggling =
@@ -945,7 +1058,7 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                           {getTypeLabel(config.type)}
                         </span>
                         <span className="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-500 text-xs">
-                          {modelCount} 个模型
+                          {modelSummary}
                         </span>
                         <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 text-xs">
                           {config.weight ?? 0}
@@ -992,7 +1105,7 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                       </div> */}
                       <div className="text-xs text-center flex-shrink-0">
                         <span className="text-indigo-500 bg-indigo-500/10 px-3 h-6 rounded-full flex items-center justify-center">
-                          {modelCount} 个模型
+                          {modelSummary}
                         </span>
                       </div>
                       <div className="text-xs text-center flex-shrink-0">
@@ -1001,14 +1114,6 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                         </span>
                       </div>
                       <div className="flex items-center justify-between gap-2 flex-shrink-0">
-                        <span
-                          className={cn(
-                            "text-xs font-medium whitespace-nowrap",
-                            isEnabled ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400",
-                          )}
-                        >
-                          {isEnabled ? "已启用" : "已停用"}
-                        </span>
                         <Switch
                           checked={isEnabled}
                           disabled={isToggling}
@@ -1017,13 +1122,13 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                         />
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
-                        <Button variant="ghost" size="sm" onClick={() => handleEdit(channel)}>
+                        <Button variant="ghost" className="w-8 h-8" size="sm" onClick={() => handleEdit(channel)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-destructive hover:text-destructive"
+                          className="w-8 h-8 text-destructive hover:text-destructive"
                           onClick={() => handleDelete(channel.key)}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -1277,18 +1382,18 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
 
                   {modelEditorMode === "visual" ? (
                     <div className="space-y-2">
-                      <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_56px] md:gap-2 text-xs font-medium text-muted-foreground">
+                      <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_100px] md:gap-2 text-xs font-medium text-muted-foreground">
                         <div>模型 ID</div>
                         <div>模型名称</div>
-                        <div className="text-center">删除</div>
+                        <div className="text-center">状态 / 删除</div>
                       </div>
                       {modelRows.map((row, index) => {
-                        const canDelete = !isEmptyModelRow(row) || modelRows.length > 1;
+                        const canDelete = !isEmptyModelRow(row);
 
                         return (
                           <div
                             key={index}
-                            className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_56px] gap-2"
+                            className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_100px] gap-2"
                           >
                             <Input
                               value={row.id}
@@ -1302,16 +1407,28 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                               placeholder="模型名称，默认等于模型ID"
                               className="text-sm"
                             />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-10 w-10 text-destructive hover:text-destructive justify-self-start md:justify-self-center"
-                              onClick={() => removeModelRow(index)}
-                              disabled={!canDelete}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <div className="flex h-10 items-center justify-center gap-2">
+                              <Switch
+                                checked={row.enabled !== false}
+                                onCheckedChange={(checked) => {
+                                  const nextRows = [...modelRows];
+                                  nextRows[index] = { ...row, enabled: checked };
+                                  updateModelRowsState(nextRows);
+                                }}
+                                disabled={!canDelete}
+                                aria-label={`模型 ${row.name || row.id || index} 启用开关`}
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive justify-self-start md:justify-self-center"
+                                onClick={() => removeModelRow(index)}
+                                disabled={!canDelete}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
                         );
                       })}
@@ -1323,9 +1440,11 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                         onChange={(e) => setModelJsonValue(e.target.value)}
                         rows={12}
                         className="font-mono text-sm"
-                        placeholder='[{"id":"gpt-4.1-mini","name":"gpt-4.1-mini"}]'
+                        placeholder='[{"id":"gpt-4.1-mini","name":"gpt-4.1-mini","enabled":true}]'
                       />
-                      <p className="text-xs text-muted-foreground">JSON 结构为数组，每项包含 `id` 和 `name`。</p>
+                      <p className="text-xs text-muted-foreground">
+                        JSON 结构为数组，每项包含 `id`、`name`、`enabled`。
+                      </p>
                     </div>
                   )}
                 </CardContent>
@@ -1340,11 +1459,94 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                   onChange={(e) => setJsonValue(e.target.value)}
                   rows={18}
                   className="font-mono text-sm"
-                  placeholder='{"name":"Azure OpenAI","type":"azure-openai","endpoint":"https://example.openai.azure.com/","enabled":true,"weight":0,"api_keys":["sk-1","sk-2"],"auto_retry":true,"auto_rotate":true,"models":[{"id":"gpt-4.1-mini","name":"gpt-4.1-mini"}]}'
+                  placeholder='{"name":"Azure OpenAI","type":"azure-openai","endpoint":"https://example.openai.azure.com/","enabled":true,"weight":0,"api_keys":["sk-1","sk-2"],"auto_retry":true,"auto_rotate":true,"models":[{"id":"gpt-4.1-mini","name":"gpt-4.1-mini","enabled":true}]}'
                 />
               </CardContent>
             </Card>
           )}
+
+          <Dialog open={isFetchedModelsDialogOpen} onOpenChange={setIsFetchedModelsDialogOpen}>
+            <DialogContent className="max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>选择要写入的模型</DialogTitle>
+                <DialogDescription>
+                  先从上游模型列表中批量勾选，再写入当前渠道配置。已存在且 ID 相同的模型会保留原有别名和启用状态。
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={fetchedModelsSearchQuery}
+                      onChange={(event) => setFetchedModelsSearchQuery(event.target.value)}
+                      placeholder="搜索模型 ID 或展示名称"
+                      className="pl-9"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      已选 {selectedFetchedModelIds.length} / {fetchedModelCandidates.length}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setSelectedFetchedModelIds(fetchedModelCandidates.map((candidate) => candidate.id))
+                      }
+                    >
+                      全选
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setSelectedFetchedModelIds([])}>
+                      清空
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="max-h-[55vh] overflow-y-auto rounded-lg border">
+                  {filteredFetchedModelCandidates.length > 0 ? (
+                    <div className="divide-y">
+                      {filteredFetchedModelCandidates.map((candidate) => {
+                        const checked = selectedFetchedModelIds.includes(candidate.id);
+
+                        return (
+                          <label
+                            key={candidate.id}
+                            className="flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/30"
+                          >
+                            <Checkbox
+                              className="mt-0.5"
+                              checked={checked}
+                              onCheckedChange={(nextChecked) => toggleFetchedModelSelection(candidate.id, nextChecked)}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="font-mono text-sm text-foreground break-all">{candidate.id}</div>
+                              {candidate.label !== candidate.id && (
+                                <div className="mt-1 text-xs text-muted-foreground break-all">{candidate.label}</div>
+                              )}
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="px-4 py-12 text-center text-sm text-muted-foreground">没有匹配的模型</div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end gap-3">
+                  <Button type="button" variant="outline" onClick={() => setIsFetchedModelsDialogOpen(false)}>
+                    取消
+                  </Button>
+                  <Button type="button" onClick={handleApplyFetchedModels}>
+                    写入所选模型
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           <div className="flex items-center justify-end gap-3 pt-2">
             <Button variant="outline" onClick={closeForm}>

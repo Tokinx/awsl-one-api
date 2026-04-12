@@ -9,11 +9,13 @@ const normalizeModels = (models?: ChannelModelMapping[]): ChannelModelMapping[] 
     .map((model) => ({
       id: typeof model?.id === 'string' ? model.id.trim() : '',
       name: typeof model?.name === 'string' ? model.name.trim() : '',
+      enabled: model?.enabled !== false,
     }))
     .filter((model) => model.id.length > 0)
     .map((model) => ({
       id: model.id,
       name: model.name || model.id,
+      enabled: model.enabled,
     }))
 }
 
@@ -31,6 +33,10 @@ export const parseChannelConfig = (channel: Channel): ChannelConfig => {
 
 export const isChannelEnabled = (config: ChannelConfig): boolean => {
   return config.enabled !== false
+}
+
+export const isChannelModelEnabled = (model: ChannelModelMapping): boolean => {
+  return model.enabled !== false
 }
 
 export const parseTokenConfig = (token: Token): TokenConfig => {
@@ -99,7 +105,9 @@ export const getUniqueModelNamesFromChannels = (channels: Channel[]): string[] =
     if (!isChannelEnabled(config)) {
       return
     }
-    getChannelModels(config).forEach((model) => modelNames.add(model.name))
+    getChannelModels(config)
+      .filter((model) => isChannelModelEnabled(model))
+      .forEach((model) => modelNames.add(model.name))
   })
 
   return Array.from(modelNames).sort()

@@ -3,6 +3,7 @@ export const DEFAULT_CHANNEL_AUTO_ROTATE = true;
 export const DEFAULT_CHANNEL_ENABLED = true;
 export const DEFAULT_CHANNEL_WEIGHT = 0;
 export const MAX_CHANNEL_WEIGHT = 5;
+export const DEFAULT_CHANNEL_MODEL_ENABLED = true;
 export const DEFAULT_CLAUDE_API_VERSION = "2023-06-01";
 export const MAX_RETRIES_PER_KEY = 3;
 export const MAX_ROTATION_ATTEMPTS = 3;
@@ -55,7 +56,7 @@ const normalizeLegacyModels = (config: Partial<ChannelConfig>): ChannelModelMapp
     const normalizedModels: ChannelModelMapping[] = [];
     const seenNames = new Set<string>();
 
-    const pushModel = (modelId: string, modelName?: string) => {
+    const pushModel = (modelId: string, modelName?: string, enabled = DEFAULT_CHANNEL_MODEL_ENABLED) => {
         const id = modelId.trim();
         const name = (modelName || modelId).trim();
 
@@ -64,7 +65,7 @@ const normalizeLegacyModels = (config: Partial<ChannelConfig>): ChannelModelMapp
         }
 
         seenNames.add(name);
-        normalizedModels.push({ id, name });
+        normalizedModels.push({ id, name, enabled });
     };
 
     if (Array.isArray(config.models)) {
@@ -75,7 +76,8 @@ const normalizeLegacyModels = (config: Partial<ChannelConfig>): ChannelModelMapp
 
             const id = typeof model.id === "string" ? model.id : "";
             const name = typeof model.name === "string" ? model.name : id;
-            pushModel(id, name);
+            const enabled = model.enabled !== false;
+            pushModel(id, name, enabled);
         }
     }
 

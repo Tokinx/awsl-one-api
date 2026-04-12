@@ -111,7 +111,8 @@ export const findDeploymentMapping = (
 export const getChannelModels = (
     config: Partial<Pick<ChannelConfig, "models" | "supported_models" | "deployment_mapper">>
 ): ChannelModelMapping[] => {
-    return normalizeChannelConfig(config as Partial<ChannelConfig>).models;
+    return normalizeChannelConfig(config as Partial<ChannelConfig>).models
+        .filter((channelModel) => channelModel.enabled !== false);
 }
 
 export const findChannelModelMapping = (

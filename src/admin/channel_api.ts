@@ -15,6 +15,7 @@ import { buildPrefixedTargetUrl } from "../providers/shared/prefixed-target-url"
 const ChannelModelSchema = z.object({
     id: z.string().describe('Upstream model ID'),
     name: z.string().describe('External model name exposed by this proxy'),
+    enabled: z.boolean().optional().describe('Whether this model is available for routing'),
 });
 
 const parseFetchedModels = (payload: any): ChannelModelMapping[] => {
@@ -36,7 +37,7 @@ const parseFetchedModels = (payload: any): ChannelModelMapping[] => {
                 continue;
             }
             seenIds.add(id);
-            normalizedModels.push({ id, name: id });
+            normalizedModels.push({ id, name: id, enabled: true });
             continue;
         }
 
@@ -62,7 +63,7 @@ const parseFetchedModels = (payload: any): ChannelModelMapping[] => {
         ).trim() || id;
 
         seenIds.add(id);
-        normalizedModels.push({ id, name: name || id });
+        normalizedModels.push({ id, name: name || id, enabled: true });
     }
 
     return normalizedModels;

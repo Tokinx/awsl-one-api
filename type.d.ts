@@ -64,6 +64,7 @@ type ChannelType =
 type ChannelModelMapping = {
     id: string;
     name: string;
+    enabled?: boolean;
 }
 
 type ChannelConfig = {

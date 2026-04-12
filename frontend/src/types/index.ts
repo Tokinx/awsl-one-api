@@ -7,6 +7,7 @@ export interface Channel {
 export interface ChannelModelMapping {
   id: string
   name: string
+  enabled?: boolean
 }
 
 export interface ChannelConfig {
