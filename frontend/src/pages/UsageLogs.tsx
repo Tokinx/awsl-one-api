@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { useBillingConfig } from "@/hooks/use-billing-config";
 import { readScopedCache, writeScopedCache } from "@/lib/local-cache";
-import { cn, formatCurrency, parseUtcTimestamp } from "@/lib/utils";
+import { cn, formatCompactNumber, formatCurrency, parseUtcTimestamp } from "@/lib/utils";
 import { Eye, RefreshCw, Search } from "lucide-react";
 
 type UsageLogFilterState = {
@@ -117,13 +117,6 @@ const formatDuration = (value: number): string => {
   }
 
   return `${Math.round(value)} ms`;
-};
-
-const formatCompactNumber = (value: number): string => {
-  return new Intl.NumberFormat("zh-CN", {
-    notation: value >= 1000 ? "compact" : "standard",
-    maximumFractionDigits: value >= 1000 ? 1 : 0,
-  }).format(value);
 };
 
 const getUsageLogWindow = (range: AnalyticsRange): { start: Date; end: Date } => {

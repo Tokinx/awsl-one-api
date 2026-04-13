@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { useBillingConfig } from "@/hooks/use-billing-config";
 import { readScopedCache, writeScopedCache } from "@/lib/local-cache";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatCompactNumber, formatCurrency } from "@/lib/utils";
 import { Activity, CircleDollarSign, Clock3, DatabaseZap, RefreshCw, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -36,39 +36,32 @@ const BREAKDOWN_CHARTS: Array<{
   {
     dimension: "model",
     title: "模型排行",
-    description: "看清哪些模型是主要成本与流量入口。",
+    description: "看清哪些模型承载最多请求，并同步观察质量与成本。",
     barClassName: "from-amber-500 to-orange-400",
     badgeClassName: "bg-amber-500/12 text-amber-700 dark:text-amber-400",
   },
   {
     dimension: "channel",
     title: "渠道排行",
-    description: "对比不同渠道承载的请求与成本消耗。",
+    description: "对比不同渠道的请求承载能力与稳定性表现。",
     barClassName: "from-emerald-500 to-teal-400",
     badgeClassName: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400",
   },
   {
     dimension: "token",
     title: "令牌排行",
-    description: "按成本优先排序，识别最活跃的访问凭证。",
+    description: "按请求量识别最活跃的访问凭证。",
     barClassName: "from-sky-500 to-cyan-400",
     badgeClassName: "bg-sky-500/12 text-sky-600 dark:text-sky-400",
   },
   {
     dimension: "provider",
     title: "服务商排行",
-    description: "衡量各上游服务商的占比与稳定性表现。",
+    description: "衡量各上游服务商承接的请求占比与稳定性表现。",
     barClassName: "from-rose-500 to-pink-400",
     badgeClassName: "bg-rose-500/12 text-rose-600 dark:text-rose-400",
   },
 ];
-
-const formatCompactNumber = (value: number): string => {
-  return new Intl.NumberFormat("zh-CN", {
-    notation: value >= 1000 ? "compact" : "standard",
-    maximumFractionDigits: value >= 1000 ? 1 : 0,
-  }).format(value);
-};
 
 const formatPercent = (value: number): string => `${(value * 100).toFixed(1)}%`;
 

@@ -109,6 +109,7 @@ export interface AnalyticsBreakdownItem {
   failures: number
   successRate: number
   totalCost: number
+  totalTokens: number
   promptTokens: number
   completionTokens: number
   avgLatencyMs: number

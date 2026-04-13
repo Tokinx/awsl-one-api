@@ -1,5 +1,5 @@
 import { AnalyticsRange, AnalyticsTrendPoint } from "@/types";
-import { formatCurrency, parseUtcTimestamp } from "@/lib/utils";
+import { formatCompactNumber, formatCurrency, parseUtcTimestamp } from "@/lib/utils";
 import { Card } from "../ui/card";
 
 const formatAxisLabel = (value: string, range: AnalyticsRange): string => {
@@ -18,13 +18,6 @@ const formatAxisLabel = (value: string, range: AnalyticsRange): string => {
     month: "2-digit",
     day: "2-digit",
   });
-};
-
-const formatCompactNumber = (value: number): string => {
-  return new Intl.NumberFormat("zh-CN", {
-    notation: value >= 1000 ? "compact" : "standard",
-    maximumFractionDigits: value >= 1000 ? 1 : 0,
-  }).format(value);
 };
 
 export function TrendBarChart({

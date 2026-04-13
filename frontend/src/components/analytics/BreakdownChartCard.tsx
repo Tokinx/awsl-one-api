@@ -1,13 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AnalyticsBreakdownItem } from "@/types";
-import { cn, formatCurrency } from "@/lib/utils";
-
-const formatCompactNumber = (value: number): string => {
-  return new Intl.NumberFormat("zh-CN", {
-    notation: value >= 1000 ? "compact" : "standard",
-    maximumFractionDigits: value >= 1000 ? 1 : 0,
-  }).format(value);
-};
+import { cn, formatCompactNumber, formatCurrency } from "@/lib/utils";
 
 const formatPercent = (value: number): string => `${(value * 100).toFixed(1)}%`;
 
@@ -33,9 +26,7 @@ export function BreakdownChartCard({
   displayDecimals,
 }: BreakdownChartCardProps) {
   const visibleItems = items.slice(0, 6);
-  const maxCost = Math.max(...visibleItems.map((item) => item.totalCost), 0);
-  const useCostScale = maxCost > 0;
-  const maxScaleValue = useCostScale ? Math.max(maxCost, 1) : Math.max(...visibleItems.map((item) => item.requests), 1);
+  const maxRequests = Math.max(...visibleItems.map((item) => item.requests), 1);
 
   return (
     <Card className="overflow-hidden border-0">
@@ -61,8 +52,7 @@ export function BreakdownChartCard({
           </div>
         ) : (
           visibleItems.map((item, index) => {
-            const scaleValue = useCostScale ? item.totalCost : item.requests;
-            const width = scaleValue > 0 ? Math.max((scaleValue / maxScaleValue) * 100, 6) : 0;
+            const width = item.requests > 0 ? Math.max((item.requests / maxRequests) * 100, 6) : 0;
 
             return (
               <div key={`${title}-${item.label}-${index}`}>
@@ -81,17 +71,15 @@ export function BreakdownChartCard({
                         {item.label}
 
                         <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                          <span>请求 {formatCompactNumber(item.requests)}</span>
                           <span>成功率 {formatPercent(item.successRate)}</span>
-                          <span>输出 {formatCompactNumber(item.completionTokens)}</span>
+                          <span>消耗 {formatCompactNumber(item.totalTokens)}</span>
+                          <span>费用 {formatCurrency(item.totalCost, displayDecimals)}</span>
                         </div>
                       </div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-semibold">
-                      {useCostScale ? formatCurrency(item.totalCost, displayDecimals) : formatCompactNumber(item.requests)}
-                    </div>
+                    <div className="font-semibold">{formatCompactNumber(item.requests)}</div>
                     <div className="text-xs text-muted-foreground">{Math.round(item.avgLatencyMs)} ms</div>
                   </div>
                 </div>

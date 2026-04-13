@@ -723,6 +723,7 @@ SELECT
     sum(_sample_interval) AS requests,
     sum(${DOUBLE_FIELDS.successFlag} * _sample_interval) AS successes,
     sum(${normalizedTotalCostExpression} * _sample_interval) AS total_cost,
+    sum(${DOUBLE_FIELDS.totalTokens} * _sample_interval) AS total_tokens,
     sum(${DOUBLE_FIELDS.promptTokens} * _sample_interval) AS prompt_tokens,
     sum(${DOUBLE_FIELDS.completionTokens} * _sample_interval) AS completion_tokens,
     sum(${DOUBLE_FIELDS.latencyMs} * _sample_interval) / sum(_sample_interval) AS avg_latency_ms
@@ -730,7 +731,7 @@ FROM ${dataset}
 WHERE ${buildRangeWhereClause(config)}
     AND ${dimensionField} != ''
 GROUP BY label
-ORDER BY total_cost DESC, requests DESC
+ORDER BY requests DESC, total_cost DESC
 LIMIT 12
     `.trim());
 
@@ -748,6 +749,7 @@ LIMIT 12
                 failures: Math.max(0, requests - successes),
                 successRate: requests > 0 ? successes / requests : 0,
                 totalCost: toNumber(row.total_cost),
+                totalTokens: toNumber(row.total_tokens),
                 promptTokens: toNumber(row.prompt_tokens),
                 completionTokens: toNumber(row.completion_tokens),
                 avgLatencyMs: toNumber(row.avg_latency_ms),

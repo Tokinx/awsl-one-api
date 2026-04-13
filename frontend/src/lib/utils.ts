@@ -43,6 +43,36 @@ export function formatQuota(value: number, displayDecimals = DEFAULT_BILLING_DIS
   return formatCurrency(value, displayDecimals)
 }
 
+export function formatCompactNumber(value: number): string {
+  const absValue = Math.abs(value)
+
+  const formatWithSuffix = (divisor: number, suffix: string): string => {
+    const scaled = value / divisor
+    const formatted = new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: Math.abs(scaled) >= 100 ? 0 : 1,
+    }).format(scaled)
+
+    return `${formatted}${suffix}`
+  }
+
+  if (absValue >= 1_000_000_000) {
+    return formatWithSuffix(1_000_000_000, 'B')
+  }
+
+  if (absValue >= 1_000_000) {
+    return formatWithSuffix(1_000_000, 'M')
+  }
+
+  if (absValue >= 1_000) {
+    return formatWithSuffix(1_000, 'K')
+  }
+
+  return new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
 export function copyToClipboard(text: string): Promise<void> {
   return navigator.clipboard.writeText(text)
 }
