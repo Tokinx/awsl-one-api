@@ -25,10 +25,11 @@
 - API routes: `src/admin/*_api.ts`, provider files in `src/providers/`.
 - Channel types: use string literals (e.g., `openai-responses`, `azure-openai-responses`).
 
-## Testing Guidelines
+## Testing & Lint
 - No dedicated test framework is currently configured.
-- Use `bun run build` as a basic safety check for UI changes.
+- Use `bun run build` (runs frontend TypeScript check + Vite build) as basic safety check for UI changes.
 - For backend changes, run `bun run dev` or `bun run dev:worker` and validate with the API Test page.
+- Frontend lint: `cd frontend && bun run lint` (ESLint with react-hooks and react-refresh rules).
 
 ## Commit & Pull Request Guidelines
 - No formal commit conventions are documented in-repo; use clear, imperative messages (e.g., "Add responses proxy").
