@@ -4,6 +4,7 @@ import { Bot, Check, FileText, Globe, Shield, SlidersHorizontal } from "lucide-r
 
 import { apiClient } from "@/api/client";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -366,27 +367,17 @@ export function SystemSettings() {
             </div>
           </div>
           <div className="flex-1" />
-          <div className="inline-flex flex-wrap rounded-md border">
-            {PRECISION_OPTIONS.map((option) => {
-              const isActive = normalizedSystemConfig.displayDecimals === option.value;
-              return (
-                <Button
-                  key={option.value}
-                  type="button"
-                  variant={isActive ? "default" : "outline"}
-                  onClick={() =>
-                    setSystemConfig((current) => ({
-                      ...current,
-                      displayDecimals: option.value,
-                    }))
-                  }
-                  className="h-8 border-0"
-                >
-                  {option.label}
-                </Button>
-              );
-            })}
-          </div>
+          <ButtonGroup
+            aria-label="显示金额精度"
+            value={normalizedSystemConfig.displayDecimals}
+            options={PRECISION_OPTIONS}
+            onValueChange={(value) =>
+              setSystemConfig((current) => ({
+                ...current,
+                displayDecimals: value,
+              }))
+            }
+          />
         </section>
 
         <div className="h-px bg-border" />
