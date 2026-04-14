@@ -328,7 +328,7 @@ export function SystemSettings() {
                   <Bot className="h-4 w-4" />
                   发送测试消息
                 </div>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs text-muted-foreground/60">
                   {!telegramConfigComplete
                     ? "请先填写完整的 Bot Token 和 Chat ID。"
                     : telegramSecurityVerified

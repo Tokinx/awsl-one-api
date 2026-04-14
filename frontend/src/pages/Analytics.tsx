@@ -84,7 +84,7 @@ const getAnalyticsBreakdownCacheKey = (range: AnalyticsRange, dimension: Analyti
 const getInitialAnalyticsRange = (): AnalyticsRange => {
   const cachedRange = readScopedCache<AnalyticsRange>(ANALYTICS_RANGE_CACHE_KEY)?.data;
 
-  return RANGE_OPTIONS.some((option) => option.value === cachedRange) ? cachedRange : "7d";
+  return (cachedRange && RANGE_OPTIONS.some((option) => option.value === cachedRange)) ? cachedRange : "24h";
 };
 
 export function Analytics() {
@@ -229,7 +229,7 @@ export function Analytics() {
   return (
     <PageContainer
       title="总览看板"
-      description="聚合查看请求、成本、成功率与关键维度分布。详细排查请进入使用日志页面。"
+      description="聚合查看请求、成本、成功率与关键维度分布。"
       actions={
         <div className="flex items-center gap-2">
           <div className="w-28">

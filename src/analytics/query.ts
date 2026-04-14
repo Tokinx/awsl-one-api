@@ -270,8 +270,8 @@ const getRangeConfig = (range?: string): { range: AnalyticsRange; config: RangeC
     }
 
     return {
-        range: "7d",
-        config: RANGE_CONFIG["7d"],
+        range: "24h",
+        config: RANGE_CONFIG["24h"],
     };
 };
 
