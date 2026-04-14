@@ -336,12 +336,14 @@ const buildInitialFetchedModelSelection = (
   candidates: FetchedModelCandidate[],
   currentModels: ChannelModelMapping[],
 ): string[] => {
+  if (currentModels.length === 0) {
+    return candidates.map((candidate) => candidate.id);
+  }
+
   const currentModelIds = new Set(currentModels.map((model) => model.id));
-  const matchedIds = candidates
+  return candidates
     .filter((candidate) => currentModelIds.has(candidate.id))
     .map((candidate) => candidate.id);
-
-  return matchedIds.length > 0 ? matchedIds : candidates.map((candidate) => candidate.id);
 };
 
 const trimSlashes = (value: string): string => value.replace(/^\/+|\/+$/g, "");
