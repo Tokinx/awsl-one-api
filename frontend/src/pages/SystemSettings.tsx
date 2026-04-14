@@ -361,8 +361,7 @@ export function SystemSettings() {
               <h3 className="font-bold tracking-tight">显示精度设置</h3>
               <p className="text-sm text-muted-foreground">
                 页面显示金额保留 {normalizedSystemConfig.displayDecimals} 位小数，示例：$
-                {(0).toFixed(normalizedSystemConfig.displayDecimals)}
-                {currentPrecisionOption ? `（当前：${currentPrecisionOption.label}）` : ""}
+                {(0.123456789).toFixed(normalizedSystemConfig.displayDecimals)}
               </p>
             </div>
           </div>

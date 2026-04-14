@@ -26,7 +26,7 @@ export const PRECISION_OPTIONS = [
   { label: "低", value: 2 },
   { label: "中", value: 4 },
   { label: "高", value: 6 },
-  { label: "超高", value: 9 },
+  // { label: "超高", value: 9 },
 ] as const;
 
 const normalizeString = (value: unknown): string => {
