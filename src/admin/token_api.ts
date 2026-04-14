@@ -3,6 +3,7 @@ import { OpenAPIRoute } from 'chanfana';
 import { z } from 'zod';
 
 import { CommonErrorResponse, CommonSuccessfulResponse } from "../model";
+import { TokenUtils } from "./token_utils";
 
 // Token 列表 API
 export class TokenListEndpoint extends OpenAPIRoute {
@@ -48,7 +49,8 @@ export class TokenUpsertEndpoint extends OpenAPIRoute {
                         schema: z.object({
                             name: z.string().describe('Token name'),
                             channel_keys: z.array(z.string()).describe('Channel keys to bind (empty array means access to all channels)'),
-                            total_quota: z.number().int().nonnegative().describe('Total quota amount in raw billing units'),
+                            total_quota: z.union([z.literal(-1), z.number().int().nonnegative()])
+                                .describe('Total quota amount in raw billing units, -1 means unlimited'),
                         }),
                     },
                 },
@@ -62,18 +64,22 @@ export class TokenUpsertEndpoint extends OpenAPIRoute {
 
     async handle(c: Context<HonoCustomType>) {
         const body = await c.req.json<ApiTokenData>();
+        const normalizedBody: ApiTokenData = {
+            ...body,
+            total_quota: TokenUtils.normalizeQuota(body.total_quota),
+        };
         const { key } = c.req.param();
 
         // Validate channels exist using batch query (if channel_keys is not empty)
-        if (body.channel_keys && body.channel_keys.length > 0) {
-            const channelQuery = body.channel_keys.map(() => '?').join(',');
+        if (normalizedBody.channel_keys && normalizedBody.channel_keys.length > 0) {
+            const channelQuery = normalizedBody.channel_keys.map(() => '?').join(',');
             const existingChannels = await c.env.DB.prepare(
                 `SELECT key FROM channel_config WHERE key IN (${channelQuery})`
-            ).bind(...body.channel_keys).all();
+            ).bind(...normalizedBody.channel_keys).all();
 
-            if (!existingChannels.results || existingChannels.results.length !== body.channel_keys.length) {
+            if (!existingChannels.results || existingChannels.results.length !== normalizedBody.channel_keys.length) {
                 const existingKeys = existingChannels.results?.map((row: any) => row.key) || [];
-                const missingKeys = body.channel_keys.filter(key => !existingKeys.includes(key));
+                const missingKeys = normalizedBody.channel_keys.filter(key => !existingKeys.includes(key));
                 return c.text(`Channels not found: ${missingKeys.join(', ')}`, 400);
             }
         }
@@ -85,7 +91,7 @@ export class TokenUpsertEndpoint extends OpenAPIRoute {
              ON CONFLICT(key) DO UPDATE SET
              value = excluded.value,
              updated_at = datetime('now')`
-        ).bind(key, JSON.stringify(body)).run();
+        ).bind(key, JSON.stringify(normalizedBody)).run();
 
         if (!result.success) {
             return c.text('Failed to upsert token', 500);

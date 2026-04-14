@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getApiKeyFromHeaders, fetchTokenData, fetchChannelsForToken } from "./shared/auth";
 import { getChannelModels } from "../utils";
 import { normalizeChannelConfig } from "../channel-config";
+import { TokenUtils } from "../admin/token_utils";
 
 export class ModelsEndpoint extends OpenAPIRoute {
     schema = {
@@ -56,6 +57,7 @@ export class ModelsEndpoint extends OpenAPIRoute {
         }
 
         const modelsSet = new Set<string>();
+        const hasRemainingQuota = TokenUtils.hasRemainingQuota(tokenInfo.tokenData.total_quota, tokenInfo.usage);
 
         for (const row of channelsResult.results) {
             const config = normalizeChannelConfig(JSON.parse(row.value) as ChannelConfig);
@@ -63,6 +65,9 @@ export class ModelsEndpoint extends OpenAPIRoute {
                 continue;
             }
             for (const model of getChannelModels(config)) {
+                if (!hasRemainingQuota && await TokenUtils.modelRequiresPaidQuota(c, model.name, config)) {
+                    continue;
+                }
                 modelsSet.add(model.name);
             }
         }

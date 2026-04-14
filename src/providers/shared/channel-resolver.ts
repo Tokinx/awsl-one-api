@@ -56,10 +56,6 @@ export const resolveChannel = async (
 
     const { tokenData, usage } = tokenInfo;
 
-    if (usage >= tokenData.total_quota) {
-        return c.text("Quota exceeded", 402);
-    }
-
     const channelsResult = await fetchChannelsForToken(c, tokenData);
 
     if (!channelsResult.results || channelsResult.results.length === 0) {
@@ -80,7 +76,7 @@ export const resolveChannel = async (
     const policy = getRoutePolicy(routeId);
     const allowedTypes = policy.allowedTypes;
 
-    const availableChannels: ResolvedChannelCandidate[] = [];
+    let availableChannels: ResolvedChannelCandidate[] = [];
     let hasDisabledMatchingChannel = false;
 
     for (const row of channelsResult.results) {
@@ -122,6 +118,23 @@ export const resolveChannel = async (
             return c.text(`No enabled channels available for model: ${requestedModel}. Please enable a channel first.`, 503);
         }
         return c.text(`Model not supported: ${requestedModel}. Please configure models.`, 400);
+    }
+
+    if (!TokenUtils.hasRemainingQuota(tokenData.total_quota, usage)) {
+        const freeChannels = await Promise.all(
+            availableChannels.map(async (channel) => ({
+                channel,
+                requiresPaidQuota: await TokenUtils.modelRequiresPaidQuota(c, requestedModel, channel.config),
+            }))
+        );
+
+        availableChannels = freeChannels
+            .filter((item) => !item.requiresPaidQuota)
+            .map((item) => item.channel);
+
+        if (availableChannels.length === 0) {
+            return c.text("Quota exceeded for paid models", 402);
+        }
     }
 
     const selectedChannel = pickHighestPriorityChannel(availableChannels);

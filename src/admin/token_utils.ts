@@ -16,6 +16,8 @@ type UsageCostResult = {
     hasPricing: boolean;
 }
 
+const UNLIMITED_TOKEN_QUOTA = -1;
+
 const normalizeBillingMode = (value: unknown): PricingBillingMode | undefined => {
     if (value === "volume" || value === "request") {
         return value;
@@ -26,6 +28,54 @@ const normalizeBillingMode = (value: unknown): PricingBillingMode | undefined =>
 
 const calculateFixedCostRaw = (value: unknown): number => {
     return calculateRequestCostRaw(value || 0);
+};
+
+const normalizeTokenQuota = (value: unknown): number => {
+    if (typeof value === "number" && Number.isFinite(value)) {
+        const normalizedValue = Math.round(value);
+        return normalizedValue === UNLIMITED_TOKEN_QUOTA
+            ? UNLIMITED_TOKEN_QUOTA
+            : Math.max(0, normalizedValue);
+    }
+
+    if (typeof value === "string" && value.trim().length > 0) {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) {
+            return normalizeTokenQuota(parsed);
+        }
+    }
+
+    return 0;
+};
+
+const normalizeTokenUsage = (value: unknown): number => {
+    if (typeof value === "number" && Number.isFinite(value)) {
+        return Math.max(0, Math.round(value));
+    }
+
+    if (typeof value === "string" && value.trim().length > 0) {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) {
+            return normalizeTokenUsage(parsed);
+        }
+    }
+
+    return 0;
+};
+
+const hasPositivePricingValue = (value: unknown): boolean => {
+    return typeof value === "number" && Number.isFinite(value) && value > 0;
+};
+
+const pricingRequiresQuota = (pricing: ModelPricing | null): boolean => {
+    if (!pricing) {
+        return false;
+    }
+
+    return hasPositivePricingValue(pricing.request)
+        || hasPositivePricingValue(pricing.input)
+        || hasPositivePricingValue(pricing.output)
+        || hasPositivePricingValue(pricing.cache);
 };
 
 // Token 工具对象
@@ -51,6 +101,24 @@ export const TokenUtils = {
         // Fallback to global pricing
         const globalPricingMap = await getJsonSetting(c, CONSTANTS.MODEL_PRICING_KEY);
         return globalPricingMap?.[model] || null;
+    },
+    normalizeQuota(value: unknown): number {
+        return normalizeTokenQuota(value);
+    },
+    hasRemainingQuota(totalQuota: unknown, usage: unknown): boolean {
+        const normalizedTotalQuota = normalizeTokenQuota(totalQuota);
+        const normalizedUsage = normalizeTokenUsage(usage);
+
+        return normalizedTotalQuota === UNLIMITED_TOKEN_QUOTA
+            || normalizedUsage < normalizedTotalQuota;
+    },
+    async modelRequiresPaidQuota(
+        c: Context<HonoCustomType>,
+        model: string,
+        channelConfig: ChannelConfig
+    ): Promise<boolean> {
+        const pricing = await this.getPricing(c, model, channelConfig);
+        return pricingRequiresQuota(pricing);
     },
 
     async calculateUsageCost(

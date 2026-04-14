@@ -35,7 +35,7 @@ export interface Token {
 export interface TokenConfig {
   name: string
   channel_keys?: string[]
-  total_quota: number
+  total_quota: number // 原始计费单位整数，-1 表示无限额度
 }
 
 export interface BillingConfig {

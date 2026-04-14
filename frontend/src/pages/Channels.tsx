@@ -5,6 +5,7 @@ import { apiClient } from "@/api/client";
 import { Channel, ChannelConfig, ChannelModelMapping } from "@/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -49,9 +50,14 @@ const channelTypes = [
 ];
 
 const channelWeightOptions = Array.from({ length: 6 }, (_, weight) => ({
-  value: String(weight),
-  label: `权重 ${weight}`,
+  value: weight,
+  label: String(weight),
 }));
+
+const modelEditorModeOptions = [
+  { value: "visual", label: "可视化" },
+  { value: "json", label: "JSON" },
+] as const;
 
 const createEmptyModelRow = (): ModelRow => ({
   id: "",
@@ -1007,7 +1013,9 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                 const modelCount = (config.models || []).length;
                 const enabledModelCount = (config.models || []).filter((model) => model.enabled !== false).length;
                 const modelSummary =
-                  enabledModelCount === modelCount ? `${modelCount} 个模型` : `${enabledModelCount}/${modelCount} 个模型`;
+                  enabledModelCount === modelCount
+                    ? `${modelCount} 个模型`
+                    : `${enabledModelCount}/${modelCount} 个模型`;
                 const isMenuOpen = openMenu === channel.key;
                 const isEnabled = config.enabled !== false;
                 const isToggling =
@@ -1226,21 +1234,19 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                     </div>
                     <div className="space-y-2">
                       <Label className="text-sm">渠道权重</Label>
-                      <Select
-                        value={String(formData.weight ?? 0)}
-                        onChange={(event) =>
+                      <ButtonGroup
+                        aria-label="渠道权重"
+                        value={normalizeChannelWeight(formData.weight)}
+                        options={channelWeightOptions}
+                        onValueChange={(value) =>
                           setFormData({
                             ...formData,
-                            weight: normalizeChannelWeight(Number(event.target.value)),
+                            weight: normalizeChannelWeight(value),
                           })
                         }
-                      >
-                        {channelWeightOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </Select>
+                        className="flex h-10 items-center px-2 gap-1"
+                        buttonClassName="rounded-sm w-8 h-6 data-[state=on]:bg-amber-600 data-[state=on]:text-white"
+                      />
                       <p className="text-xs text-muted-foreground">相同模型权重优先，相同权重随机分配。</p>
                     </div>
                     <div className="">
@@ -1330,7 +1336,9 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                         />
                         <div>
                           <div className="text-sm font-medium">自动轮换</div>
-                          <p className="mt-1 text-xs text-muted-foreground">重试时随机切换同渠道其他密钥；关闭后始终重试当前密钥</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            重试时随机切换同渠道其他密钥；关闭后始终重试当前密钥
+                          </p>
                         </div>
                       </label>
                     </div>
@@ -1351,22 +1359,13 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        variant={modelEditorMode === "visual" ? "secondary" : "outline"}
-                        size="sm"
-                        onClick={() => setModelEditorModeWithSync("visual")}
-                      >
-                        可视化
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={modelEditorMode === "json" ? "secondary" : "outline"}
-                        size="sm"
-                        onClick={() => setModelEditorModeWithSync("json")}
-                      >
-                        JSON
-                      </Button>
+                      <ButtonGroup
+                        aria-label="模型配置编辑模式"
+                        value={modelEditorMode}
+                        options={modelEditorModeOptions}
+                        onValueChange={setModelEditorModeWithSync}
+                        activeVariant="secondary"
+                      />
                       <Button
                         type="button"
                         variant="outline"
