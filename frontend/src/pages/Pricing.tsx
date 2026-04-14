@@ -47,6 +47,8 @@ type TokenRef = {
 const PRICING_DECIMALS = 6;
 const PRICING_INPUT_STEP = "0.000001";
 const AUTO_SAVE_DELAY_MS = 800;
+const VOLUME_ESTIMATE_INPUT_WEIGHT = 3;
+const VOLUME_ESTIMATE_OUTPUT_WEIGHT = 1;
 type SaveSource = "auto" | "manual";
 type SaveState = "idle" | "saving" | "saved" | "error" | "invalid";
 type BuildPricingRowsOptions = {
@@ -237,6 +239,29 @@ const createDefaultPricingRow = (model: string, pricing?: Partial<PricingModel> 
     cache: normalized.cache,
     legacyRequest: normalized.legacyRequest,
   };
+};
+
+const calculateEstimatedPricingCost = (
+  pricing: Pick<PricingRow, "billingMode" | "input" | "output" | "cache">,
+): number => {
+  if (pricing.billingMode === "request") {
+    return normalizePricingNumber(pricing.input + pricing.output + pricing.cache, 0);
+  }
+
+  const blendedRate =
+    (pricing.input * VOLUME_ESTIMATE_INPUT_WEIGHT + pricing.output * VOLUME_ESTIMATE_OUTPUT_WEIGHT) /
+    (VOLUME_ESTIMATE_INPUT_WEIGHT + VOLUME_ESTIMATE_OUTPUT_WEIGHT);
+
+  return normalizePricingNumber(blendedRate, 0);
+};
+
+const formatEstimatedPricingCost = (
+  pricing: Pick<PricingRow, "billingMode" | "input" | "output" | "cache">,
+): string => {
+  const estimatedCost = calculateEstimatedPricingCost(pricing).toFixed(PRICING_DECIMALS);
+  const unitLabel = pricing.billingMode === "request" ? "/ 次" : "/ 1M tokens";
+
+  return `$${estimatedCost} ${unitLabel}`;
 };
 
 const buildModelChannelMap = (channels: Channel[]): Map<string, ChannelRef[]> => {
@@ -884,13 +909,18 @@ export function Pricing() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {filteredCards.map((card) => (
                 <Card key={card.model}>
-                  <CardHeader className="p-4 pb-2">
+                  <CardHeader className="p-4 pb-2 space-y-0.5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <CardTitle className="truncate font-mono text-base">{card.model}</CardTitle>
                       </div>
                       <Badge className={cn("w-3 h-3 p-0", card.isCustomized ? "bg-success" : "bg-background")}></Badge>
                     </div>
+                    {card.isCustomized ? (
+                      <p className="text-xs text-muted-foreground/60">预估成本 ≈ {formatEstimatedPricingCost(card)}</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground/60">免费</p>
+                    )}
                   </CardHeader>
 
                   <CardContent className="px-4 pb-4 space-y-2">
@@ -919,7 +949,10 @@ export function Pricing() {
                               key={option.value}
                               type="button"
                               size="sm"
-                              className={cn("h-6 px-2 text-xs shadow-none! bg-transparent! text-muted-foreground", card.billingMode === option.value && "bg-green-500/5! text-green-600")}
+                              className={cn(
+                                "h-6 px-2 text-xs shadow-none! bg-transparent! text-muted-foreground",
+                                card.billingMode === option.value && "bg-green-500/5! text-green-600",
+                              )}
                               onClick={() => updateBillingMode(card.model, option.value)}
                             >
                               {option.label}
@@ -931,7 +964,8 @@ export function Pricing() {
 
                     {card.legacyRequest > 0 && (
                       <p className="text-[11px] leading-5 text-muted-foreground">
-                        兼容旧版独立按次价格 {card.legacyRequest.toFixed(PRICING_DECIMALS)}，修改后会切换到新版计费规则。
+                        兼容旧版独立按次价格 {card.legacyRequest.toFixed(PRICING_DECIMALS)}
+                        ，修改后会切换到新版计费规则。
                       </p>
                     )}
 
@@ -942,9 +976,7 @@ export function Pricing() {
                             <span className="text-xs px-1.5 py-0.5 bg-accent text-muted-foreground border-r border-accent">
                               {channel.label}
                             </span>
-                            <span className="text-xs px-1.5 py-0.5 text-mist-600/60">
-                              {channel.weight}
-                            </span>
+                            <span className="text-xs px-1.5 py-0.5 text-mist-600/60">{channel.weight}</span>
                           </div>
                         ))
                       ) : (
@@ -961,7 +993,8 @@ export function Pricing() {
             <CardHeader>
               <CardTitle className="text-lg">JSON 配置</CardTitle>
               <CardDescription>
-                默认只会保存大于 0 的价格字段；但 `billingMode: "request"` 即使价格全为 0，也会作为有效配置保留。切回卡片模式时，会与当前渠道中的模型集合自动合并。
+                默认只会保存大于 0 的价格字段；但 `billingMode: "request"` 即使价格全为
+                0，也会作为有效配置保留。切回卡片模式时，会与当前渠道中的模型集合自动合并。
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
@@ -973,7 +1006,8 @@ export function Pricing() {
                 placeholder='{"gpt-4.1": {"billingMode": "volume", "input": 0.8, "output": 3.2}}'
               />
               <p className="text-xs text-muted-foreground">
-                格式：模型名称 → {"{"} billingMode?: "volume" | "request", input?: 输入价格, output?: 输出价格, cache?: 缓存价格, request?: 旧版独立按次价格 {"}"}
+                格式：模型名称 → {"{"} billingMode?: "volume" | "request", input?: 输入价格, output?: 输出价格, cache?:
+                缓存价格, request?: 旧版独立按次价格 {"}"}
               </p>
             </CardContent>
           </Card>
