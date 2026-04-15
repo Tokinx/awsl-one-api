@@ -3,86 +3,78 @@
 
 一个基于 Cloudflare Workers 分布式、低延迟、高性能的 AI 统一网关，支持多渠道管理、负载均衡、用量统计和追踪。
 </div>
+
 <div align="right">
 本项目基于 <a href="https://github.com/dreamhunter2333/awsl-one-api" target="_blank">awsl-one-api</a>
 </div>
 
-## ✨ 功能特性
+## 项目概览
 
-- 🚀 **基于 Cloudflare Workers**：全球分布式网络、低延迟、高性能
-- 🔐 **多渠道**：支持 OpenAI、Gemini、Azure OpenAI、Claude 等多种 AI 服务商
-- 🎫 **负载均衡**：支持按权重多渠道路由、单渠道多密钥重试/轮换，以及跨渠道 fallback
-- 📊 **用量统计**：Analytics Engine 实时统计，支持日志回溯便于成本分析
-- 💰 **定价管理**：灵活的模型定价配置
-- 🎨 **Web 管理界面**：直观的 Web 界面进行配置管理
-- 🧪 **API 测试工具**：内置 API 测试功能，支持实时调试
+- 基于 Cloudflare Workers：全球分布式网络、低延迟、高性能
+- 统一代理入口：支持 `/v1/chat/completions`、`/v1/messages`、`/v1/responses`、`/v1/audio/speech`、`/v1/models`
+- 负载均衡路由：支持按权重路由，单渠道多 Key，失败重试、Key 轮换和跨渠道 fallback
+- 配额与计费：支持 Token 级额度控制、全局模型定价、渠道级模型定价
+- 观测能力：写入 Cloudflare Analytics Engine，后台提供概览、趋势、分布和用量日志检索
+- 管理后台：React + Vite 管理界面，覆盖渠道、令牌、定价、API 测试、系统设置
+- 管理员安全：默认管理员令牌登录，可选 Telegram 二次验证，后台登录链路带限速与 session cookie
+- API 文档：基于 Chanfana 暴露 Swagger、ReDoc、OpenAPI JSON，可在系统设置中开关
 
-## 🏗️ 系统架构
+## 支持范围
 
-```mermaid
-flowchart LR
-    subgraph Clients["客户端"]
-        A[Client Apps]
-    end
+### 代理接口
 
-    subgraph CF["Cloudflare Workers"]
-        B[One API on Workers]
-        D1[(Cloudflare<br/>D1 Database)]
-        D2[(Cloudflare<br/>Analytics Engine)]
-    end
+| 路由 | 说明 | 对应渠道类型 |
+| --- | --- | --- |
+| `/v1/chat/completions` | OpenAI Chat Completions 兼容代理 | `openai`、`azure-openai`、`gemini` |
+| `/v1/messages` | Anthropic Claude Messages 兼容代理 | `claude`、`claude-to-openai` |
+| `/v1/responses` | OpenAI / Azure Responses 代理 | `openai-responses`、`azure-openai-responses` |
+| `/v1/audio/speech` | TTS 语音生成代理 | `openai-audio`、`azure-openai-audio` |
+| `/v1/models` | 按 Token 权限和额度过滤后的模型列表 | 根据 Token 可访问渠道动态返回 |
 
-    subgraph Providers["AI 服务商"]
-        C1[Anthropic]
-        C2[OpenAI]
-    end
+### 管理后台
 
-    A -->|API Request| B
-    B -->|Proxy| C1
-    B -->|Proxy| C2
-    B <-->|Read/Write| D1
-    B -->|Write| D2
-```
+当前后台页面包括：
 
-<details>
-<summary><h2>📁 项目结构</h2></summary>
+- `Dashboard`：总请求数、成功率、成本、耗时、Token/渠道/模型/提供商分布
+- `Usage Logs`：按时间范围、维度、关键字和结果筛选明细日志
+- `Channels`：渠道配置、权重、自动重试/轮换、模型映射、拉取上游模型列表
+- `Tokens`：API Token 管理、渠道访问范围、额度限制、用量重置
+- `Pricing`：全局模型定价编辑，支持按量和按次计费
+- `API Test`：直接在后台测试 `/v1/chat/completions`、`/v1/messages`、`/v1/responses`、`/v1/audio/speech`
+- `System Settings`：Telegram 管理员验证、金额显示精度、API 文档开关
+
+## 项目结构
 
 ```text
 one-api-workers/
-├── src/                          # 源代码目录
-│   ├── admin/                    # 管理接口
-│   │   ├── channel_api.ts        # 渠道管理 API
-│   │   ├── token_api.ts          # Token 管理 API
-│   │   ├── pricing_api.ts        # 定价管理 API
-│   │   ├── db_api.ts             # 数据库初始化 API
-│   │   └── index.ts              # 管理接口路由
-│   ├── providers/                # AI 服务商
-│   │   ├── azure-openai-proxy.ts # Azure OpenAI 代理
-│   │   ├── openai-proxy.ts       # OpenAI / Gemini 兼容代理
-│   │   ├── claude-proxy.ts       # Claude 代理
-│   │   ├── openai-responses-proxy.ts # OpenAI Responses 代理
-│   │   ├── azure-openai-responses-proxy.ts # Azure Responses 代理
-│   │   └── index.ts              # 渠道路由
-│   ├── db/                       # 数据库相关
-│   ├── model/                    # 数据模型
-│   ├── constants.ts              # 常量定义
-│   ├── utils.ts                  # 工具函数
-│   └── index.ts                  # 主入口文件
-├── public/                       # 静态文件
-│   └── index.html                # Web 管理界面
-├── type.d.ts                     # 类型定义
-├── wrangler.jsonc                # 生产/部署配置
-├── wrangler.local.jsonc          # 本地开发配置
-└── package.json                  # 项目配置
+├── src/
+│   ├── admin/                    # 管理接口：auth / channel / token / pricing / analytics / system
+│   ├── analytics/                # Analytics Engine 写入与查询
+│   ├── db/                       # D1 初始化与迁移
+│   ├── providers/                # 各类上游代理实现
+│   ├── billing.ts                # 计费与金额精度
+│   ├── channel-config.ts         # 渠道配置归一化
+│   ├── system-config.ts          # 系统配置与 Telegram 安全配置
+│   └── index.ts                  # Worker 入口
+├── frontend/
+│   ├── src/pages/                # Dashboard / Channels / Tokens / Pricing / Usage Logs / Settings
+│   ├── src/components/           # 布局、图表、UI 组件
+│   └── package.json              # 前端构建与 lint
+├── public/                       # 前端构建产物，由 Worker 直接托管
+├── docs/                         # 使用文档与安全文档
+├── tests/                        # Mock upstream + 本地 E2E 脚本
+├── wrangler.jsonc                # 生产配置
+├── wrangler.local.jsonc          # 本地 Worker 配置
+├── type.d.ts                     # Worker 绑定与共享类型
+└── package.json                  # 根 workspace 与开发命令
 ```
 
-</details>
-
-## 🚀 快速开始
+## 快速开始
 
 ### 环境要求
 
 - Bun 1.3+
-- Cloudflare Workers 账户
+- Cloudflare 账户，Workers + D1 database + Analytics Engine (`usage_events_by_token`)
 
 ### 安装依赖
 
@@ -90,346 +82,89 @@ one-api-workers/
 bun install
 ```
 
-仓库已配置为 Bun workspaces，根目录一次安装会同时安装 Worker 和 `frontend/` 的依赖。
+### 配置 Cloudflare 绑定
 
-### 配置环境
+当前仓库里的 `wrangler.jsonc` / `wrangler.local.jsonc` 已经包含运行所需绑定结构，但你需要替换成自己的环境信息：
 
-1. 修改 `wrangler.jsonc`，用于生产部署：
+- `d1_databases[].database_name` / `database_id`：替换为自己的 D1
+- `analytics_engine_datasets[].dataset`：默认使用 `usage_events_by_token`
+- `vars.FRONTEND_DEV_SERVER_URL`：仅本地联调时使用，默认 `http://127.0.0.1:5173`
+- `assets`：保持 `public/` 与 `ASSETS` 绑定即可
 
-```jsonc
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "one-api-workers",
-  "main": "src/index.ts",
-  "compatibility_date": "2025-04-28",
-  "workers_dev": false,
-  "vars": {
-    "ADMIN_TOKEN": "your-secure-admin-token-here"
-  },
-  "assets": {
-    "directory": "./public",
-    "binding": "ASSETS",
-    "run_worker_first": true
-  },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "your-database-name",
-      "database_id": "your-database-id"
-    }
-  ]
-}
-```
+当前配置中的关键 secrets：
 
-2. 修改 `wrangler.local.jsonc`，用于本地开发：
+- `ADMIN_TOKEN`：管理员登录令牌，必需
+- `CF_API_TOKEN`：用于查询 Analytics Engine SQL，支持后台分析看板和用量日志
+- `CF_ACCOUNT_ID`：与 `CF_API_TOKEN` 配套，用于 Cloudflare Analytics 查询
 
-```jsonc
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "one-api-workers",
-  "main": "src/index.ts",
-  "compatibility_date": "2025-04-28",
-  "workers_dev": false,
-  "vars": {
-    "ADMIN_TOKEN": "your-local-admin-token",
-    "FRONTEND_DEV_SERVER_URL": "http://127.0.0.1:5173"
-  }
-}
-```
-
-3. 创建 Cloudflare D1 数据库：
+示例：
 
 ```bash
-wrangler d1 create one-api-workers
+wrangler secret put ADMIN_TOKEN
+wrangler secret put CF_API_TOKEN
+wrangler secret put CF_ACCOUNT_ID
 ```
 
-4. 在 Cloudflare Dashboard 中手动绑定生产域名：
+本地开发可以用 `.dev.vars` 提供这些值；`tests/` 下的脚本也会优先读取这个文件。
 
-1. 进入 `Workers & Pages`
-2. 选择当前 Worker
-3. 打开 `Settings > Domains & Routes`
-4. 选择 `Add > Custom Domain`
-5. 添加你的生产域名
+### 数据库初始化与迁移
 
-如果你选择在 Dashboard 管理生产域名，就不要再把 `routes` / `custom_domain` 写回 `wrangler.jsonc`，否则下次 `wrangler deploy` 会用配置文件覆盖 Dashboard 中的路由设置。
+项目会在首次请求时自动执行 D1 schema 初始化和迁移，不需要额外手动跑 SQL。
+
+如果你希望在部署后主动触发初始化，也可以在通过管理员认证后访问：
+
+```text
+POST /api/admin/db_initialize
+```
 
 ### 本地开发
+
+启动前后端联调：
 
 ```bash
 bun run dev
 ```
 
-- 前端 Vite 开发服务器：`http://127.0.0.1:5173`
-- Cloudflare Worker 本地服务：`http://127.0.0.1:8788`（入口）
+常用地址：
 
-### 部署到生产环境
+- 前端 Vite 开发服务器：`http://127.0.0.1:5173`
+- Worker 本地服务：`http://127.0.0.1:8787`
+
+其他常用命令：
+
+```bash
+bun run dev:worker
+bun run build
+bun run cf-typegen
+cd frontend && bun run lint
+```
+
+### 部署
 
 ```bash
 bun run deploy
 ```
 
-部署前会自动构建前端资源到 `public/`。
+部署流程会先构建前端，再执行 `wrangler deploy --config wrangler.jsonc`。
 
-<details>
-<summary><h2>📖 使用与配置</h2></summary>
+如果你在 Cloudflare Dashboard 中管理自定义域名，不要再把 `routes` / `custom_domain` 写回 `wrangler.jsonc`，否则下次部署会覆盖 Dashboard 中的域名配置。
 
-### 使用指南
+## 文档
 
-#### 渠道配置
+- [使用与配置](docs/usage-and-configuration.md)
+- [管理员认证与防护](docs/security/admin-auth-protection.md)
+- [测试与验证](docs/testing.md)
 
-1. 访问 `https://your-domain.com`
-2. 使用管理员 Token 登录
-3. 进入 **🔗 渠道管理** 页面
-4. 点击 **➕ 添加渠道** 按钮
-5. 选择渠道类型（OpenAI、Azure OpenAI、Claude、Responses）
-6. 填写渠道标识和配置信息（名称、端点、API 密钥、模型映射）
-7. 点击 **💾 保存渠道** 按钮
+## 贡献
 
-**提示**：系统会根据选择的渠道类型自动显示相应的配置字段。
+欢迎提交 Issue 和 Pull Request。
 
-#### Token 创建和使用
-
-1. 在 Web 界面切换到 **🔑 令牌管理** 标签
-2. 点击 **➕ 添加令牌** 按钮
-3. 填写令牌名称，系统会自动生成 `sk-` 开头的 Token
-4. 配置允许访问的渠道和配额
-5. 点击 **💾 保存令牌** 按钮
-6. 使用 **📋 复制** 按钮获取 Token 用于 API 调用
-
-#### OpenAI 兼容 API
-
-本项目提供完全兼容的 OpenAI API 接口：
-
-```bash
-curl https://your-domain.com/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_API_TOKEN" \
-  -d '{
-    "model": "gpt-4",
-    "messages": [
-      {
-        "role": "user",
-        "content": "Hello, world!"
-      }
-    ]
-  }'
-```
-
-#### Responses API（OpenAI / Azure）
-
-```bash
-curl https://your-domain.com/v1/responses \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_API_TOKEN" \
-  -d '{
-    "model": "gpt-5.1-codex-max",
-    "input": "Hello, Responses API!"
-  }'
-```
-
-#### API 测试工具
-
-管理界面内置了强大的 API 测试工具，无需额外工具即可进行 API 调试：
-
-**功能特性**
-
-- **🚀 一键测试**：直接在 Web 界面中测试 API 调用
-- **📝 JSON 编辑器**：支持 JSON 格式验证和语法高亮
-- **⚡ 实时响应**：显示响应时间、状态码和完整响应内容
-- **🔍 错误诊断**：自动区分 HTTP 错误和 JSON 响应，便于排查问题
-- **📋 一键复制**：支持复制 Token 和响应内容
-
-**使用步骤**
-
-1. 访问管理界面，切换到 **🧪 API 测试** 标签
-2. 输入你的 API Token（可从令牌管理页面复制）
-3. 编辑请求 JSON（预填充标准格式）
-4. 点击 **🚀 发送请求** 按钮
-5. 查看响应结果和状态信息
-
-### 管理功能
-
-#### Web 管理界面
-
-访问 `https://your-domain.com` 即可使用 Web 管理界面，功能包括：
-
-- **🔗 渠道管理**：添加、编辑、删除 AI 服务商（支持 OpenAI、Azure OpenAI、Claude、OpenAI Responses、Azure Responses）
-- **🔑 API Token 管理**：生成、管理和监控 API Token 使用情况
-- **💰 定价配置**：灵活配置不同模型的定价策略
-- **🧪 API 测试工具**：内置 API 测试界面，支持实时调试和错误排查
-
-**管理界面特性**
-
-- **现代化 UI**：响应式设计，支持桌面和移动设备
-- **实时反馈**：操作结果即时显示，支持悬浮提示
-- **智能表单**：自动生成 Token、JSON 格式验证、一键复制功能，根据渠道类型智能显示配置字段
-- **安全认证**：管理员 Token 认证，数据安全保护
-
-### 配置说明
-
-#### 渠道配置
-
-目前支持以下 AI 服务商：
-
-**OpenAI 配置**
-
-```json
-{
-  "name": "My OpenAI Channel",
-  "type": "openai",
-  "endpoint": "https://api.openai.com/v1/",
-  "api_key": "sk-your-openai-api-key",
-  "deployment_mapper": {
-    "gpt-4": "gpt-4",
-    "gpt-3.5-turbo": "gpt-3.5-turbo"
-  }
-}
-```
-
-**Gemini 配置**
-
-Gemini 通过官方 OpenAI 兼容层接入，建议将 `endpoint` 配置为 `https://generativelanguage.googleapis.com/v1beta/openai/`。
-
-```json
-{
-  "name": "My Gemini Channel",
-  "type": "gemini",
-  "endpoint": "https://generativelanguage.googleapis.com/v1beta/openai/",
-  "api_key": "AIza-your-gemini-api-key",
-  "deployment_mapper": {
-    "gemini-2.5-flash": "gemini-2.5-flash",
-    "gemini-2.5-pro": "gemini-2.5-pro"
-  }
-}
-```
-
-**Azure OpenAI 配置**
-
-```json
-{
-  "name": "My Azure OpenAI",
-  "type": "azure-openai",
-  "endpoint": "https://your-resource.openai.azure.com/",
-  "api_key": "your-azure-api-key",
-  "api_version": "2024-02-15-preview",
-  "deployment_mapper": {
-    "gpt-4": "gpt-4-deployment-name",
-    "gpt-3.5-turbo": "gpt-35-turbo-deployment-name"
-  }
-}
-```
-
-**Claude 配置**
-
-```json
-{
-  "name": "My Claude Channel",
-  "type": "claude",
-  "endpoint": "https://api.anthropic.com/v1/",
-  "api_key": "sk-your-claude-api-key",
-  "api_version": "2023-06-01",
-  "deployment_mapper": {
-    "claude-3-5-sonnet-20241022": "claude-3-5-sonnet-20241022"
-  }
-}
-```
-
-**OpenAI Responses 配置**
-
-```json
-{
-  "name": "My OpenAI Responses",
-  "type": "openai-responses",
-  "endpoint": "https://api.openai.com/v1/",
-  "api_key": "sk-your-openai-api-key",
-  "deployment_mapper": {
-    "gpt-5.1-codex-max": "gpt-5.1-codex-max"
-  }
-}
-```
-
-**Azure OpenAI Responses 配置（v1）**
-
-```json
-{
-  "name": "My Azure Responses",
-  "type": "azure-openai-responses",
-  "endpoint": "https://your-resource.openai.azure.com/",
-  "api_key": "your-azure-api-key",
-  "deployment_mapper": {
-    "gpt-5.1-codex-max": "your-deployment-name"
-  }
-}
-```
-
-**配置字段说明**：
-
-- `name`: 渠道显示名称
-- `type`: 服务商类型（`openai`、`gemini`、`azure-openai`、`claude`、`openai-responses`、`azure-openai-responses`）
-- `endpoint`: API 端点地址
-- `api_key`: API 密钥
-- `api_version`: API 版本（Azure OpenAI / Claude 可用；Azure Responses v1 请留空）
-- `deployment_mapper`: 模型名称映射关系（用于自定义模型名称映射）
-
-### Token 配置
-
-支持详细的 Token 配置，包括名称、访问权限和配额管理：
-
-```json
-{
-  "name": "用户令牌1",
-  "channel_keys": ["azure-openai-1", "azure-openai-2"],
-  "total_quota": 1000000
-}
-```
-
-**配置字段说明**：
-
-- `name`: Token 名称，便于管理识别
-- `channel_keys`: 允许访问的渠道列表，空数组表示允许所有渠道
-- `total_quota`: 总配额（基础单位：1百万 token = $1.00）
-
-### 监控与统计
-
-- **使用量统计**：自动记录每次 API 调用的 Token 使用量
-- **费用计算**：基于模型定价自动计算费用
-- **配额管理**：支持 Token 级别的配额限制
-- **实时监控**：Web 界面实时显示使用情况和剩余配额
-
-### 核心优势
-
-- **零配置部署**：基于 Cloudflare Workers，无需服务器维护
-- **全球加速**：利用 Cloudflare 全球边缘网络，低延迟访问
-- **成本优化**：按需计费，无固定服务器成本
-- **高可用性**：Cloudflare 基础设施保证 99.9% 可用性
-- **安全可靠**：内置 Token 认证和配额管理机制
-
-### 安全性
-
-- **Token 认证**：所有 API 调用需要有效的 Bearer Token
-- **管理员认证**：管理接口使用独立的管理员 Token
-- **CORS 支持**：配置跨域访问策略
-
-### API 文档
-
-部署后可访问以下地址查看完整 API 文档：
-
-- Swagger UI: `https://your-domain.com/api/docs`
-- ReDoc: `https://your-domain.com/api/redocs`
-- OpenAPI JSON: `https://your-domain.com/api/openapi.json`
-
-</details>
-
-## 🤝 贡献
-
-欢迎提交 Issue 和 Pull Request！
-
-## 📄 许可证
+## 许可证
 
 MIT License
 
 鸣谢：<a href="https://github.com/dreamhunter2333/awsl-one-api" target="_blank">awsl-one-api</a>
 
-## 🙋‍♂️ 支持
+## 支持
 
 如有问题或建议，请创建 Issue 或联系维护者。
