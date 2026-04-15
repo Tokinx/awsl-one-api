@@ -53,6 +53,8 @@
     "usageLogs": "Usage Logs",
     "apiTest": "API Test",
     "settings": "Settings",
+    "theme": "Theme",
+    "language": "Language",
     "lightMode": "Light",
     "darkMode": "Dark",
     "collapse": "Collapse",

@@ -11,6 +11,7 @@ import {
   Languages,
   Moon,
   Sun,
+  Check,
   LogOut,
   X,
   PanelLeftClose,
@@ -22,6 +23,13 @@ import { useAuthStore } from "@/store/auth";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { changeLanguage, SUPPORTED_LANGUAGES, type SupportedLanguage } from "@/i18n";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type NavGroup = "overview" | "management" | "tools" | "system";
 
@@ -77,11 +85,10 @@ export function Sidebar({
     return "light";
   });
 
-  const toggleTheme = () => {
-    const newTheme = theme === "light" ? "dark" : "light";
-    setTheme(newTheme);
-    localStorage.setItem("theme", newTheme);
-    if (newTheme === "dark") {
+  const setThemeMode = (nextTheme: "light" | "dark") => {
+    setTheme(nextTheme);
+    localStorage.setItem("theme", nextTheme);
+    if (nextTheme === "dark") {
       document.documentElement.classList.add("dark");
     } else {
       document.documentElement.classList.remove("dark");
@@ -91,16 +98,17 @@ export function Sidebar({
   const langLabels: Record<SupportedLanguage, string> = {
     "zh-CN": t("language.zhCN"),
     "zh-TW": t("language.zhTW"),
-    "en": t("language.en"),
+    en: t("language.en"),
   };
 
-  const cycleLang = () => {
-    const currentIndex = SUPPORTED_LANGUAGES.indexOf(i18n.language as SupportedLanguage);
-    const nextIndex = (currentIndex + 1) % SUPPORTED_LANGUAGES.length;
-    changeLanguage(SUPPORTED_LANGUAGES[nextIndex]);
-  };
-
-  const currentLangLabel = langLabels[i18n.language as SupportedLanguage] || langLabels["zh-CN"];
+  const currentLanguage = SUPPORTED_LANGUAGES.includes(i18n.language as SupportedLanguage)
+    ? (i18n.language as SupportedLanguage)
+    : "zh-CN";
+  const currentLangLabel = langLabels[currentLanguage];
+  const actionButtonClassName = cn(
+    "flex h-9 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 data-[state=open]:bg-muted/80 data-[state=open]:text-foreground",
+    collapsed ? "w-10" : "w-full",
+  );
 
   const handleLogout = async () => {
     await logout();
@@ -185,7 +193,10 @@ export function Sidebar({
       {/* Navigation */}
       <nav className="flex-1 px-2.5 py-3 overflow-y-auto scrollbar-thin">
         {groupOrder.map((group) => (
-          <div key={group} className={cn("space-y-1", group !== groupOrder[0] && "mt-3 pt-3 border-t border-border/30")}>
+          <div
+            key={group}
+            className={cn("space-y-1", group !== groupOrder[0] && "mt-3 pt-3 border-t border-border/30")}
+          >
             {groupedNavItems[group].map((item) => (
               <NavLink key={item.href} item={item} />
             ))}
@@ -196,83 +207,100 @@ export function Sidebar({
       {/* Footer */}
       <div className={cn("p-2.5 border-t", collapsed && "p-2")}>
         {/* Action Buttons */}
-        <div className={cn("flex gap-1 mb-2", collapsed ? "flex-col items-center" : "")}>
-          <button
-            type="button"
-            title={collapsed ? (theme === "dark" ? t('sidebar.lightMode') : t('sidebar.darkMode')) : undefined}
+        <TooltipProvider delayDuration={120}>
+          <div
             className={cn(
-              "flex items-center justify-center rounded-md transition-colors duration-150",
-              collapsed
-                ? "w-10 h-9 hover:bg-muted text-muted-foreground hover:text-foreground"
-                : "flex-1 h-8 gap-1.5 px-2.5 hover:bg-muted/70 text-muted-foreground hover:text-foreground text-[11px] font-medium",
-            )}
-            onClick={toggleTheme}
-          >
-            {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-            {!collapsed && <span>{theme === "dark" ? t('sidebar.lightMode') : t('sidebar.darkMode')}</span>}
-          </button>
-
-          <button
-            type="button"
-            title={collapsed ? currentLangLabel : undefined}
-            className={cn(
-              "flex items-center justify-center rounded-md transition-colors duration-150",
-              collapsed
-                ? "w-10 h-9 hover:bg-muted text-muted-foreground hover:text-foreground"
-                : "flex-1 h-8 gap-1.5 px-2.5 hover:bg-muted/70 text-muted-foreground hover:text-foreground text-[11px] font-medium",
-            )}
-            onClick={cycleLang}
-          >
-            <Languages className="h-3.5 w-3.5" />
-            {!collapsed && <span>{currentLangLabel}</span>}
-          </button>
-
-          <a
-            href="https://github.com/Tokinx/one-api-workers"
-            target="_blank"
-            rel="noopener noreferrer"
-            title={collapsed ? "GitHub" : undefined}
-            className={cn(
-              "flex items-center justify-center rounded-md transition-colors duration-150",
-              collapsed
-                ? "w-10 h-9 hover:bg-muted text-muted-foreground hover:text-foreground"
-                : "flex-1 h-8 gap-1.5 px-2.5 hover:bg-muted/70 text-muted-foreground hover:text-foreground text-[11px] font-medium",
+              "mb-2 grid gap-1.5",
+              collapsed ? "grid-cols-1 justify-items-center" : showCollapseToggle ? "grid-cols-4" : "grid-cols-3",
             )}
           >
-            <GitBranch className="h-3.5 w-3.5" />
-            {!collapsed && <span>GitHub</span>}
-          </a>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <a
+                  href="https://github.com/Tokinx/one-api-workers"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="GitHub"
+                  className={actionButtonClassName}
+                >
+                  <GitBranch className="h-3.5 w-3.5" />
+                </a>
+              </TooltipTrigger>
+              <TooltipContent side="top">GitHub</TooltipContent>
+            </Tooltip>
 
-          {/* Collapse Toggle */}
-          {showCollapseToggle && (
-            <div className={cn("hidden lg:flex", collapsed && "px-0 justify-center")}>
-              <button
-                type="button"
-                onClick={onToggleCollapse}
-                className={cn(
-                  "flex items-center justify-center rounded-md transition-colors duration-150",
-                  collapsed
-                    ? "w-10 h-9 hover:bg-muted text-muted-foreground hover:text-foreground"
-                    : "flex-1 h-8 gap-1.5 px-2.5 hover:bg-muted/70 text-muted-foreground hover:text-foreground text-[11px] font-medium",
-                )}
-              >
-                {collapsed ? (
-                  <PanelLeftOpen className="h-3.5 w-3.5" />
-                ) : (
-                  <>
-                    <PanelLeftClose className="h-3.5 w-3.5" />
-                    <span>{t('sidebar.collapse')}</span>
-                  </>
-                )}
-              </button>
-            </div>
-          )}
-        </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`${t("sidebar.theme")} · ${theme === "dark" ? t("sidebar.darkMode") : t("sidebar.lightMode")}`}
+                  className={actionButtonClassName}
+                >
+                  {theme === "dark" ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" align="center" className="w-40">
+                <DropdownMenuItem className="justify-between" onSelect={() => setThemeMode("light")}>
+                  <span className="flex items-center gap-2">
+                    <Sun className="h-3.5 w-3.5" />
+                    {t("sidebar.lightMode")}
+                  </span>
+                  {theme === "light" && <Check className="h-3.5 w-3.5 text-primary" />}
+                </DropdownMenuItem>
+                <DropdownMenuItem className="justify-between" onSelect={() => setThemeMode("dark")}>
+                  <span className="flex items-center gap-2">
+                    <Moon className="h-3.5 w-3.5" />
+                    {t("sidebar.darkMode")}
+                  </span>
+                  {theme === "dark" && <Check className="h-3.5 w-3.5 text-primary" />}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`${t("sidebar.language")} · ${currentLangLabel}`}
+                  className={actionButtonClassName}
+                >
+                  <Languages className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" align="center" className="w-40">
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <DropdownMenuItem key={lang} className="justify-between" onSelect={() => changeLanguage(lang)}>
+                    <span>{langLabels[lang]}</span>
+                    {currentLanguage === lang && <Check className="h-3.5 w-3.5 text-primary" />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {showCollapseToggle && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={onToggleCollapse}
+                    aria-label={collapsed ? t("sidebar.openSidebar") : t("sidebar.collapse")}
+                    className={actionButtonClassName}
+                  >
+                    {collapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {collapsed ? t("sidebar.openSidebar") : t("sidebar.collapse")}
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        </TooltipProvider>
 
         {/* Logout Button */}
         <button
           type="button"
-          title={collapsed ? t('sidebar.logout') : undefined}
+          title={collapsed ? t("sidebar.logout") : undefined}
           className={cn(
             "flex items-center justify-center gap-2 w-full rounded-md text-[13px] font-medium transition-all duration-150",
             collapsed ? "h-9" : "h-9 px-3",
@@ -281,7 +309,7 @@ export function Sidebar({
           onClick={handleLogout}
         >
           <LogOut className="h-3.5 w-3.5" />
-          {!collapsed && <span>{t('sidebar.logout')}</span>}
+          {!collapsed && <span>{t("sidebar.logout")}</span>}
         </button>
       </div>
     </aside>

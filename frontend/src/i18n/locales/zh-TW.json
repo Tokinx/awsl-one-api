@@ -53,6 +53,8 @@
     "usageLogs": "使用日誌",
     "apiTest": "API 測試",
     "settings": "系統設定",
+    "theme": "主題",
+    "language": "語言",
     "lightMode": "淺色",
     "darkMode": "深色",
     "collapse": "收起",
