@@ -77,10 +77,11 @@ const loginVerifyRequestSchema = z.object({
 });
 
 const buildDirectLoginResponse = async (
-    c: Context<HonoCustomType>
+    c: Context<HonoCustomType>,
+    telegramSecurityEnabled: boolean
 ) => {
-    const session = await createAdminSession(c);
-    setAdminSessionCookie(c, session.sessionToken, session.expiresAt);
+    const session = await createAdminSession(c, telegramSecurityEnabled);
+    setAdminSessionCookie(c, session.sessionToken, session.expiresAt, session.ttlMs);
 
     return {
         success: true,
@@ -178,7 +179,7 @@ export class AdminLoginStartEndpoint extends OpenAPIRoute {
         );
 
         if (!securityEnabled) {
-            return buildDirectLoginResponse(c);
+            return buildDirectLoginResponse(c, securityEnabled);
         }
 
         const challenge = await createAdminLoginChallenge(c);
@@ -266,8 +267,9 @@ export class AdminLoginVerifyEndpoint extends OpenAPIRoute {
 
         const systemConfig = await getSystemConfig(c);
         const securityConfig = systemConfig.adminSecurity;
+        const securityEnabled = isTelegramSecurityEnabled(securityConfig);
 
-        if (!isTelegramSecurityEnabled(securityConfig)) {
+        if (!securityEnabled) {
             return c.text("当前未开启 Telegram 登录验证", 400);
         }
 
@@ -316,8 +318,8 @@ export class AdminLoginVerifyEndpoint extends OpenAPIRoute {
             ),
         ]);
 
-        const session = await createAdminSession(c);
-        setAdminSessionCookie(c, session.sessionToken, session.expiresAt);
+        const session = await createAdminSession(c, securityEnabled);
+        setAdminSessionCookie(c, session.sessionToken, session.expiresAt, session.ttlMs);
 
         await sendAdminLoginResultNotification(
             securityConfig,

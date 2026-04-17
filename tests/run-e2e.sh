@@ -55,10 +55,31 @@ assert_http() {
   fi
 }
 
+assert_between() {
+  local name="$1" actual="$2" min="$3" max="$4"
+  TOTAL=$((TOTAL + 1))
+  if [[ "$actual" =~ ^-?[0-9]+$ ]] && [[ "$actual" -ge "$min" ]] && [[ "$actual" -le "$max" ]]; then
+    echo "  ✅ #$TOTAL $name"
+    PASS=$((PASS + 1))
+  else
+    echo "  ❌ #$TOTAL $name"
+    echo "     expected: [$min, $max]"
+    echo "     actual:   ${actual:-<empty>}"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
 do_get() { curl -s -w "\n%{http_code}" "$@"; }
 do_post() { curl -s -w "\n%{http_code}" -X POST "$@"; }
 reset_mock_inspection() { curl -s -X POST "$MOCK_API/__reset" > /dev/null; }
 get_mock_inspection() { curl -sG "$MOCK_API/__inspect" --data-urlencode "key=$1"; }
+json_field() {
+  local path="$1"
+  node -e "let raw=''; const path = process.argv[1].split('.'); process.stdin.on('data', (chunk) => raw += chunk); process.stdin.on('end', () => { const payload = JSON.parse(raw); let current = payload; for (const segment of path) { current = current?.[segment]; } process.stdout.write(current == null ? '' : String(current)); });" "$path"
+}
+ttl_seconds_until_iso() {
+  node -e "const expiresAt = Date.parse(process.argv[1]); process.stdout.write(Number.isFinite(expiresAt) ? String(Math.round((expiresAt - Date.now()) / 1000)) : '');" "$1"
+}
 set_system_config_disabled() {
   "${DB_EXEC[@]}" "INSERT OR REPLACE INTO settings (key, value) VALUES ('SYSTEM_CONFIG', '{\"displayDecimals\":6,\"adminSecurity\":{\"enabled\":false,\"telegramBotToken\":\"\",\"telegramChatId\":\"\",\"verifiedFingerprint\":\"\",\"verifiedAt\":null},\"apiDocs\":{\"enabled\":true}}')" > /dev/null 2>&1
 }
@@ -66,6 +87,12 @@ set_system_config_with_telegram() {
   local bot_token="$1" chat_id="$2" fingerprint
   fingerprint=$(node -e "const source = process.argv[1] + '::' + process.argv[2]; let hash = 2166136261; for (let index = 0; index < source.length; index += 1) { hash ^= source.charCodeAt(index); hash = Math.imul(hash, 16777619); } process.stdout.write(source ? 'tgv1-' + ((hash >>> 0).toString(16)) : '');" "$bot_token" "$chat_id")
   "${DB_EXEC[@]}" "INSERT OR REPLACE INTO settings (key, value) VALUES ('SYSTEM_CONFIG', '{\"displayDecimals\":6,\"adminSecurity\":{\"enabled\":true,\"telegramBotToken\":\"$bot_token\",\"telegramChatId\":\"$chat_id\",\"verifiedFingerprint\":\"$fingerprint\",\"verifiedAt\":\"2026-04-14T00:00:00.000Z\"},\"apiDocs\":{\"enabled\":true}}')" > /dev/null 2>&1
+}
+seed_login_challenge() {
+  local challenge_id="$1" code="$2" request_ip="$3" code_hash expires_at
+  code_hash=$(node -e "const crypto = require('node:crypto'); process.stdout.write(crypto.createHash('sha256').update(process.argv[1]).digest('hex'))" "$code")
+  expires_at=$(date -u -d "+5 minutes" +"%Y-%m-%dT%H:%M:%SZ")
+  "${DB_EXEC[@]}" "INSERT OR REPLACE INTO admin_login_challenge (id, code_hash, expires_at, attempts, max_attempts, request_ip, request_country, request_region, request_city, request_colo, request_timezone) VALUES ('$challenge_id', '$code_hash', '$expires_at', 0, 5, '$request_ip', '', '', '', '', 'Asia/Shanghai')" > /dev/null 2>&1
 }
 seed_blocked_rate_limit() {
   local category="$1" bucket_id="$2" attempts="$3" blocked_until="$4" now_iso
@@ -263,6 +290,13 @@ R=$(do_post "$API/api/admin/auth/login" -H "Content-Type: application/json" -c "
 assert_http "admin login → 200" "200" "\"requiresVerification\":false" "$R"
 assert "admin login response keeps session token out of body" "\"sessionToken\":null" "$R"
 assert "admin login sets session cookie" "oaw_admin_session" "$(cat "$COOKIE_JAR")"
+LOGIN_BODY=$(echo "$R" | sed '$d')
+LOGIN_SESSION_EXPIRES_AT=$(printf '%s' "$LOGIN_BODY" | json_field "data.sessionExpiresAt")
+LOGIN_SESSION_TTL_SECONDS=$(ttl_seconds_until_iso "$LOGIN_SESSION_EXPIRES_AT")
+assert_between "admin session ttl without Telegram → about 7 days" "$LOGIN_SESSION_TTL_SECONDS" 604200 605400
+LOGIN_COOKIE_EXPIRY=$(awk 'NF >= 7 && $6 == "oaw_admin_session" {print $5}' "$COOKIE_JAR")
+LOGIN_COOKIE_TTL_SECONDS=$((LOGIN_COOKIE_EXPIRY - $(date +%s)))
+assert_between "admin session cookie ttl without Telegram → about 7 days" "$LOGIN_COOKIE_TTL_SECONDS" 604200 605400
 
 R=$(do_get -b "$COOKIE_JAR" "$API/api/admin/channel")
 assert_http "admin cookie grants access" "200" "\"success\":true" "$R"
@@ -272,6 +306,36 @@ assert_http "admin logout → 200" "200" "\"success\":true" "$R"
 
 R=$(do_get -b "$COOKIE_JAR" "$API/api/admin/channel")
 assert_http "admin cookie invalid after logout" "401" "Unauthorized" "$R"
+
+rm -f "$COOKIE_JAR"
+
+# ---- Admin cookie session with Telegram ----
+echo ""
+echo "--- Admin session cookie with Telegram ---"
+
+set_system_config_with_telegram "dummy-bot-token" "123456"
+COOKIE_JAR=$(mktemp)
+VERIFY_IP="203.0.113.72"
+VERIFY_CHALLENGE_ID="challenge-e2e-telegram"
+VERIFY_CODE="123456"
+seed_login_challenge "$VERIFY_CHALLENGE_ID" "$VERIFY_CODE" "$VERIFY_IP"
+
+R=$(do_post "$API/api/admin/auth/verify" -H "Content-Type: application/json" -H "CF-Connecting-IP: $VERIFY_IP" -c "$COOKIE_JAR" -d "{\"challengeId\":\"$VERIFY_CHALLENGE_ID\",\"code\":\"$VERIFY_CODE\"}")
+assert_http "admin verify login → 200" "200" "\"requiresVerification\":false" "$R"
+assert "admin verify sets session cookie" "oaw_admin_session" "$(cat "$COOKIE_JAR")"
+VERIFY_BODY=$(echo "$R" | sed '$d')
+VERIFY_SESSION_EXPIRES_AT=$(printf '%s' "$VERIFY_BODY" | json_field "data.sessionExpiresAt")
+VERIFY_SESSION_TTL_SECONDS=$(ttl_seconds_until_iso "$VERIFY_SESSION_EXPIRES_AT")
+assert_between "admin session ttl with Telegram → about 30 days" "$VERIFY_SESSION_TTL_SECONDS" 2591400 2592600
+VERIFY_COOKIE_EXPIRY=$(awk 'NF >= 7 && $6 == "oaw_admin_session" {print $5}' "$COOKIE_JAR")
+VERIFY_COOKIE_TTL_SECONDS=$((VERIFY_COOKIE_EXPIRY - $(date +%s)))
+assert_between "admin session cookie ttl with Telegram → about 30 days" "$VERIFY_COOKIE_TTL_SECONDS" 2591400 2592600
+
+R=$(do_get -b "$COOKIE_JAR" "$API/api/admin/channel")
+assert_http "admin Telegram session cookie grants access" "200" "\"success\":true" "$R"
+
+R=$(do_post -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$API/api/admin/auth/logout")
+assert_http "admin Telegram session logout → 200" "200" "\"success\":true" "$R"
 
 rm -f "$COOKIE_JAR"
 

@@ -2,7 +2,8 @@ import { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 
 const ADMIN_SESSION_COOKIE_NAME = "oaw_admin_session";
-const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+const ADMIN_SESSION_TTL_WITHOUT_TELEGRAM_MS = 7 * 24 * 60 * 60 * 1000;
+const ADMIN_SESSION_TTL_WITH_TELEGRAM_MS = 30 * 24 * 60 * 60 * 1000;
 const ADMIN_LOGIN_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const ADMIN_LOGIN_CHALLENGE_MAX_ATTEMPTS = 5;
 const ADMIN_RATE_LIMIT_RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -383,16 +384,31 @@ const isSecureCookieRequest = (c: Context<HonoCustomType>): boolean => {
     return requestUrl.protocol === "https:" && !LOCAL_DEV_HOSTNAMES.has(requestUrl.hostname);
 };
 
-const buildAdminSessionCookieOptions = (
-    c: Context<HonoCustomType>,
-    expiresAt?: string
+const getAdminSessionTtlMs = (telegramSecurityEnabled: boolean): number => {
+    return telegramSecurityEnabled
+        ? ADMIN_SESSION_TTL_WITH_TELEGRAM_MS
+        : ADMIN_SESSION_TTL_WITHOUT_TELEGRAM_MS;
+};
+
+const buildAdminSessionCookieBaseOptions = (
+    c: Context<HonoCustomType>
 ) => {
     return {
         httpOnly: true,
-        maxAge: Math.floor(ADMIN_SESSION_TTL_MS / 1000),
         path: "/api/admin",
         sameSite: "Lax" as const,
         secure: isSecureCookieRequest(c),
+    };
+};
+
+const buildAdminSessionCookieOptions = (
+    c: Context<HonoCustomType>,
+    sessionTtlMs: number,
+    expiresAt?: string
+) => {
+    return {
+        ...buildAdminSessionCookieBaseOptions(c),
+        maxAge: Math.floor(sessionTtlMs / 1000),
         ...(expiresAt ? { expires: new Date(expiresAt) } : {}),
     };
 };
@@ -406,13 +422,14 @@ export const getAdminSessionTokenFromRequest = (
 export const setAdminSessionCookie = (
     c: Context<HonoCustomType>,
     sessionToken: string,
-    expiresAt: string
+    expiresAt: string,
+    sessionTtlMs: number
 ): void => {
     setCookie(
         c,
         ADMIN_SESSION_COOKIE_NAME,
         sessionToken,
-        buildAdminSessionCookieOptions(c, expiresAt)
+        buildAdminSessionCookieOptions(c, sessionTtlMs, expiresAt)
     );
 };
 
@@ -422,18 +439,20 @@ export const clearAdminSessionCookie = (
     deleteCookie(
         c,
         ADMIN_SESSION_COOKIE_NAME,
-        buildAdminSessionCookieOptions(c)
+        buildAdminSessionCookieBaseOptions(c)
     );
 };
 
 export const createAdminSession = async (
-    c: Context<HonoCustomType>
-): Promise<{ sessionToken: string; expiresAt: string }> => {
+    c: Context<HonoCustomType>,
+    telegramSecurityEnabled = false
+): Promise<{ sessionToken: string; expiresAt: string; ttlMs: number }> => {
     await cleanupExpiredArtifacts(c);
 
+    const ttlMs = getAdminSessionTtlMs(telegramSecurityEnabled);
     const sessionToken = generateSessionToken();
     const tokenHash = await toSha256Hex(sessionToken);
-    const expiresAt = new Date(Date.now() + ADMIN_SESSION_TTL_MS).toISOString();
+    const expiresAt = new Date(Date.now() + ttlMs).toISOString();
 
     await c.env.DB.prepare(
         `INSERT INTO admin_session (token_hash, expires_at)
@@ -443,6 +462,7 @@ export const createAdminSession = async (
     return {
         sessionToken,
         expiresAt,
+        ttlMs,
     };
 };
 

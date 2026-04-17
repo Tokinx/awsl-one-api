@@ -12,6 +12,7 @@
 当前实现的认证与安全要点：
 
 - 管理后台使用 session cookie，而不是每次请求直接传管理员令牌
+- session 有效期按登录安全级别区分：未启用 Telegram 验证时为 7 天，启用后为 30 天
 - 登录、验证码验证和 Telegram 通知都带应用层限速
 - API 文档可在系统设置中关闭；关闭后 `/api/docs`、`/api/redocs`、`/api/openapi.json` 会直接返回 `404`
 
