@@ -1,11 +1,11 @@
 <div align="center">
 <h1>One API on Workers</h1>
 
-一个基于 Cloudflare Workers 分布式、低延迟、高性能的 AI 统一网关，支持多渠道管理、负载均衡、用量统计和追踪。
+一个基于 Cloudflare Workers 分布式、低延迟、高性能的 AI 统一网关，支持渠道管理、负载均衡、用量统计。
 </div>
 
 <div align="right">
-本项目基于 <a href="https://github.com/dreamhunter2333/awsl-one-api" target="_blank">awsl-one-api</a>
+本项目基于 <a href="https://github.com/dreamhunter2333/awsl-one-api" target="_blank">dreamhunter2333/awsl-one-api</a> 由 AI 驱动二次开发
 </div>
 
 ## 项目概览
@@ -30,6 +30,29 @@
 | `/v1/responses` | OpenAI / Azure Responses 代理 | `openai-responses`、`azure-openai-responses` |
 | `/v1/audio/speech` | TTS 语音生成代理 | `openai-audio`、`azure-openai-audio` |
 | `/v1/models` | 按 Token 权限和额度过滤后的模型列表 | 根据 Token 可访问渠道动态返回 |
+
+## 部署方式
+
+### 一键部署：
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Tokinx/one-api-workers)
+
+
+### 手动部署
+
+```bash
+创建 D1 数据库，获取数据库 Name、ID
+启用 Analytics Engine 并创建一张数据集，获取数据集 Name
+将上述数据更新入 wrangler.jsonc
+
+# 设置生产 Secret
+wrangler secret put ADMIN_TOKEN
+wrangler secret put CF_API_TOKEN
+wrangler secret put CF_ACCOUNT_ID
+
+# 发布 Worker
+bun run deploy
+```
 
 ### 管理后台
 
@@ -139,16 +162,6 @@ bun run cf-typegen
 cd frontend && bun run lint
 ```
 
-### 部署
-
-```bash
-bun run deploy
-```
-
-部署流程会先构建前端，再执行 `wrangler deploy --config wrangler.jsonc`。
-
-如果你在 Cloudflare Dashboard 中管理自定义域名，不要再把 `routes` / `custom_domain` 写回 `wrangler.jsonc`，否则下次部署会覆盖 Dashboard 中的域名配置。
-
 ## 文档
 
 - [使用与配置](docs/usage-and-configuration.md)
@@ -163,7 +176,7 @@ bun run deploy
 
 MIT License
 
-鸣谢：<a href="https://github.com/dreamhunter2333/awsl-one-api" target="_blank">awsl-one-api</a>
+鸣谢：<a href="https://github.com/dreamhunter2333/awsl-one-api" target="_blank">dreamhunter2333/awsl-one-api</a>
 
 ## 支持
 
