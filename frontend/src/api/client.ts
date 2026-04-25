@@ -38,6 +38,19 @@ type RequestBehavior = {
   skipUnauthorizedHandler?: boolean
 }
 
+type TestApiOptions = {
+  channelKey?: string
+}
+
+type TestApiStreamOptions = TestApiOptions & {
+  signal?: AbortSignal
+  onChunk: (chunk: string) => void
+}
+
+type TestApiStreamResult = {
+  status: number
+}
+
 const isAdminEndpoint = (endpoint: string): boolean => endpoint.startsWith('/api/admin/')
 
 export function setErrorHandlers(handlers: {
@@ -290,15 +303,20 @@ export const apiClient = {
     ),
 
   // API Test - 使用自定义 token，不走通用拦截器
-  testApi: async (endpoint: string, token: string, body: unknown): Promise<TestResponse> => {
+  testApi: async (endpoint: string, token: string, body: unknown, options: TestApiOptions = {}): Promise<TestResponse> => {
     const url = `${BASE_URL}${endpoint}`
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    }
+    if (options.channelKey) {
+      headers['x-channel-key'] = options.channelKey
+    }
+
     const response = await fetch(url, {
       method: 'POST',
       credentials: 'omit',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
+      headers,
       body: JSON.stringify(body),
     })
 
@@ -318,6 +336,53 @@ export const apiClient = {
     }
 
     return responseInterceptor(response)
+  },
+
+  testApiStream: async (endpoint: string, token: string, body: unknown, options: TestApiStreamOptions): Promise<TestApiStreamResult> => {
+    const url = `${BASE_URL}${endpoint}`
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    }
+    if (options.channelKey) {
+      headers['x-channel-key'] = options.channelKey
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      credentials: 'omit',
+      signal: options.signal,
+      headers,
+      body: JSON.stringify(body),
+    })
+
+    if (!response.ok) {
+      await responseInterceptor(response)
+    }
+
+    if (!response.body) {
+      throw new ApiError('Response stream is not available', response.status)
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        options.onChunk(decoder.decode(value, { stream: true }))
+      }
+
+      const tail = decoder.decode()
+      if (tail) {
+        options.onChunk(tail)
+      }
+    } finally {
+      reader.releaseLock()
+    }
+
+    return { status: response.status }
   },
 
   // Auth check

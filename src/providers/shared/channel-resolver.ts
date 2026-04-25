@@ -120,6 +120,21 @@ export const resolveChannel = async (
         return c.text(`Model not supported: ${requestedModel}. Please configure models.`, 400);
     }
 
+    const requestedChannelKey = c.req.raw.headers.get('x-channel-key')?.trim();
+    if (requestedChannelKey) {
+        const hasTokenAccessToChannel = channelsResult.results.some((row) => row.key === requestedChannelKey);
+        if (!hasTokenAccessToChannel) {
+            return c.text(`Token is not allowed to use channel: ${requestedChannelKey}`, 403);
+        }
+
+        const selectedChannel = availableChannels.find((channel) => channel.key === requestedChannelKey);
+        if (!selectedChannel) {
+            return c.text(`Channel does not support this route or model: ${requestedChannelKey}`, 400);
+        }
+
+        availableChannels = [selectedChannel];
+    }
+
     if (!TokenUtils.hasRemainingQuota(tokenData.total_quota, usage)) {
         const freeChannels = await Promise.all(
             availableChannels.map(async (channel) => ({

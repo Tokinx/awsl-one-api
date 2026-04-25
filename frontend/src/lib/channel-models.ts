@@ -113,18 +113,35 @@ export const getUniqueModelNamesFromChannels = (channels: Channel[]): string[] =
   return Array.from(modelNames).sort()
 }
 
-export const getModelNamesForToken = (tokenKey: string, tokens: Token[], channels: Channel[]): string[] => {
+export const getChannelsForToken = (tokenKey: string, tokens: Token[], channels: Channel[]): Channel[] => {
   const matchedToken = tokens.find((token) => token.key === tokenKey)
 
   if (!matchedToken) {
-    return getUniqueModelNamesFromChannels(channels)
+    return []
   }
 
   const tokenConfig = parseTokenConfig(matchedToken)
   const allowedChannelKeys = tokenConfig.channel_keys || []
-  const targetChannels = allowedChannelKeys.length === 0
+
+  return allowedChannelKeys.length === 0
     ? channels
     : channels.filter((channel) => allowedChannelKeys.includes(channel.key))
+}
 
+export const channelSupportsModel = (channel: Channel, modelName: string): boolean => {
+  if (!modelName) {
+    return true
+  }
+
+  const config = parseChannelConfig(channel)
+  return getChannelModels(config)
+    .filter((model) => isChannelModelEnabled(model))
+    .some((model) => model.name === modelName)
+}
+
+export const getModelNamesForChannels = (channels: Channel[]): string[] => getUniqueModelNamesFromChannels(channels)
+
+export const getModelNamesForToken = (tokenKey: string, tokens: Token[], channels: Channel[]): string[] => {
+  const targetChannels = getChannelsForToken(tokenKey, tokens, channels)
   return getUniqueModelNamesFromChannels(targetChannels)
 }

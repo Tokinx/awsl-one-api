@@ -106,6 +106,9 @@ const convertClaudeToOpenAIRequest = (reqJson: any): any => {
         max_tokens: reqJson.max_tokens,
         temperature: reqJson.temperature,
         top_p: reqJson.top_p,
+        frequency_penalty: reqJson.frequency_penalty,
+        presence_penalty: reqJson.presence_penalty,
+        seed: reqJson.seed,
     };
 
     if (Array.isArray(reqJson.stop_sequences) && reqJson.stop_sequences.length > 0) {

@@ -143,8 +143,8 @@ export const AutoCompleteInput = React.forwardRef<HTMLInputElement, AutoComplete
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => handleSelect(option.value)}
                     >
-                      <span className="text-sm font-medium">{label}</span>
-                      {showDescription && <span className="text-xs text-muted-foreground">{option.description}</span>}
+                      <span className="w-full truncate text-sm font-medium">{label}</span>
+                      {showDescription && <span className="w-full truncate text-xs text-muted-foreground">{option.description}</span>}
                     </button>
                   );
                 })}
