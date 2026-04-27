@@ -16,6 +16,7 @@ const ChannelModelSchema = z.object({
     id: z.string().describe('Upstream model ID'),
     name: z.string().describe('External model name exposed by this proxy'),
     enabled: z.boolean().optional().describe('Whether this model is available for routing'),
+    default_params: z.record(z.string(), z.unknown()).optional().describe('Default request parameters applied when callers do not provide them'),
 });
 
 const parseFetchedModels = (payload: any): ChannelModelMapping[] => {

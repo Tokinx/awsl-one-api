@@ -8,6 +8,7 @@ export interface ChannelModelMapping {
   id: string
   name: string
   enabled?: boolean
+  default_params?: Record<string, unknown>
 }
 
 export interface ChannelConfig {

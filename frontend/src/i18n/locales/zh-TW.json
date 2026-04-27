@@ -157,6 +157,13 @@
     "modelConfigDesc": "外部使用模型名稱呼叫，程式會自動對應到渠道模型 ID。",
     "modelId": "模型 ID",
     "modelName": "模型名稱",
+    "defaultParams": "參數",
+    "defaultParamsEmpty": "設定參數",
+    "defaultParamsConfigured": "已設定 {{count}} 項",
+    "defaultParamsDialogTitle": "編輯預設參數",
+    "defaultParamsDialogDesc": "輸入 JSON 物件；呼叫介面時明確傳入的同名參數會覆蓋這裡的預設值。",
+    "defaultParamsPlaceholder": "{\n  \"temperature\": 0.7,\n  \"top_p\": 0.9,\n  \"reasoning\": { \"effort\": \"medium\" }\n}",
+    "formatJson": "格式化",
     "modelStatusDelete": "狀態 / 刪除",
     "modelIdPlaceholder": "模型ID，例如：gpt-4.1-mini",
     "modelNamePlaceholder": "模型名稱，預設等於模型ID",
@@ -173,7 +180,7 @@
     "noMatchingModels": "沒有匹配的模型",
     "saveChannel": "儲存渠道",
     "jsonConfig": "JSON 設定",
-    "modelJsonStructure": "JSON 結構為陣列，每項包含 `id`、`name`、`enabled`。",
+    "modelJsonStructure": "JSON 結構為陣列，每項包含 `id`、`name`、`enabled`，可選 `default_params` 物件。",
     "fillRequired": "請填寫所有必填欄位",
     "fillChannelKey": "請填寫渠道標識",
     "fillTypeEndpointKey": "請先填寫渠道類型、API 端點和 API 金鑰",
@@ -186,7 +193,9 @@
       "modelJsonInvalid": "模型 JSON 格式錯誤",
       "modelJsonMustBeArray": "模型 JSON 必須是陣列",
       "modelJsonItemMustBeObject": "模型 JSON 項必須是物件",
-      "modelJsonIdEmpty": "模型 JSON 中的 id 不能為空"
+      "modelJsonIdEmpty": "模型 JSON 中的 id 不能為空",
+      "defaultParamsJsonInvalid": "預設參數 JSON 格式錯誤",
+      "defaultParamsJsonMustBeObject": "預設參數必須是 JSON 物件"
     }
   },
   "tokens": {

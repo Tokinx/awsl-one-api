@@ -52,11 +52,28 @@ const normalizeApiKeys = (config: Partial<ChannelConfig>): string[] => {
     return normalizedKeys;
 };
 
+const normalizeDefaultParams = (defaultParams: unknown): Record<string, unknown> | undefined => {
+    if (!defaultParams || typeof defaultParams !== "object" || Array.isArray(defaultParams)) {
+        return undefined;
+    }
+
+    if (Object.keys(defaultParams).length === 0) {
+        return undefined;
+    }
+
+    return defaultParams as Record<string, unknown>;
+};
+
 const normalizeLegacyModels = (config: Partial<ChannelConfig>): ChannelModelMapping[] => {
     const normalizedModels: ChannelModelMapping[] = [];
     const seenNames = new Set<string>();
 
-    const pushModel = (modelId: string, modelName?: string, enabled = DEFAULT_CHANNEL_MODEL_ENABLED) => {
+    const pushModel = (
+        modelId: string,
+        modelName?: string,
+        enabled = DEFAULT_CHANNEL_MODEL_ENABLED,
+        defaultParams?: unknown
+    ) => {
         const id = modelId.trim();
         const name = (modelName || modelId).trim();
 
@@ -64,8 +81,14 @@ const normalizeLegacyModels = (config: Partial<ChannelConfig>): ChannelModelMapp
             return;
         }
 
+        const normalizedDefaultParams = normalizeDefaultParams(defaultParams);
+        const normalizedModel: ChannelModelMapping = { id, name, enabled };
+        if (normalizedDefaultParams) {
+            normalizedModel.default_params = normalizedDefaultParams;
+        }
+
         seenNames.add(name);
-        normalizedModels.push({ id, name, enabled });
+        normalizedModels.push(normalizedModel);
     };
 
     if (Array.isArray(config.models)) {
@@ -77,7 +100,7 @@ const normalizeLegacyModels = (config: Partial<ChannelConfig>): ChannelModelMapp
             const id = typeof model.id === "string" ? model.id : "";
             const name = typeof model.name === "string" ? model.name : id;
             const enabled = model.enabled !== false;
-            pushModel(id, name, enabled);
+            pushModel(id, name, enabled, model.default_params);
         }
     }
 

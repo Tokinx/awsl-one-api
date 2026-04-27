@@ -157,6 +157,13 @@
     "modelConfigDesc": "External calls use the model name; the system maps it to the channel model ID.",
     "modelId": "Model ID",
     "modelName": "Model Name",
+    "defaultParams": "Params",
+    "defaultParamsEmpty": "Set Params",
+    "defaultParamsConfigured": "{{count}} set",
+    "defaultParamsDialogTitle": "Edit Default Parameters",
+    "defaultParamsDialogDesc": "Enter a JSON object. Parameters explicitly sent by callers override matching defaults here.",
+    "defaultParamsPlaceholder": "{\n  \"temperature\": 0.7,\n  \"top_p\": 0.9,\n  \"reasoning\": { \"effort\": \"medium\" }\n}",
+    "formatJson": "Format",
     "modelStatusDelete": "Status / Delete",
     "modelIdPlaceholder": "Model ID, e.g. gpt-4.1-mini",
     "modelNamePlaceholder": "Model name, defaults to model ID",
@@ -173,7 +180,7 @@
     "noMatchingModels": "No matching models",
     "saveChannel": "Save Channel",
     "jsonConfig": "JSON Config",
-    "modelJsonStructure": "JSON array with `id`, `name`, `enabled` fields per item.",
+    "modelJsonStructure": "JSON array with `id`, `name`, `enabled`, and optional `default_params` object per item.",
     "fillRequired": "Please fill in all required fields",
     "fillChannelKey": "Please enter a channel key",
     "fillTypeEndpointKey": "Please fill in channel type, API endpoint, and API key first",
@@ -186,7 +193,9 @@
       "modelJsonInvalid": "Invalid model JSON format",
       "modelJsonMustBeArray": "Model JSON must be an array",
       "modelJsonItemMustBeObject": "Model JSON items must be objects",
-      "modelJsonIdEmpty": "Model ID in JSON cannot be empty"
+      "modelJsonIdEmpty": "Model ID in JSON cannot be empty",
+      "defaultParamsJsonInvalid": "Invalid default parameters JSON",
+      "defaultParamsJsonMustBeObject": "Default parameters must be a JSON object"
     }
   },
   "tokens": {

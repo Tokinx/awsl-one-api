@@ -50,13 +50,33 @@ const cloneRequestBody = <T>(requestBody: T): T => {
     return JSON.parse(JSON.stringify(requestBody)) as T;
 };
 
+const getModelDefaultParams = (
+    mapping: ChannelModelMapping
+): Record<string, unknown> | null => {
+    const defaultParams = mapping.default_params;
+    if (!defaultParams || typeof defaultParams !== "object" || Array.isArray(defaultParams)) {
+        return null;
+    }
+
+    return defaultParams;
+};
+
 const buildChannelRequestBody = (
     requestBody: any,
     channel: ResolvedChannelCandidate
 ) => {
     const runtimeRequestBody = cloneRequestBody(requestBody);
     if (runtimeRequestBody && typeof runtimeRequestBody === "object") {
-        runtimeRequestBody.model = channel.mapping.id;
+        const defaultParams = getModelDefaultParams(channel.mapping);
+        const mergedRequestBody = defaultParams
+            ? {
+                ...cloneRequestBody(defaultParams),
+                ...runtimeRequestBody,
+            }
+            : runtimeRequestBody;
+
+        mergedRequestBody.model = channel.mapping.id;
+        return mergedRequestBody;
     }
     return runtimeRequestBody;
 };

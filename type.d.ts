@@ -65,6 +65,7 @@ type ChannelModelMapping = {
     id: string;
     name: string;
     enabled?: boolean;
+    default_params?: Record<string, unknown>;
 }
 
 type ChannelConfig = {

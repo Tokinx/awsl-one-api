@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 import {
@@ -29,6 +30,7 @@ import {
   Search,
   Globe,
   Cpu,
+  SlidersHorizontal,
 } from "lucide-react";
 import { PageContainer } from "@/components/ui/page-container";
 import { useTranslation } from "react-i18next";
@@ -36,7 +38,8 @@ import i18n from "@/i18n";
 
 type EditMode = "form" | "json";
 type ModelEditorMode = "visual" | "json";
-type ModelRow = { id: string; name: string; enabled: boolean };
+type JsonObject = Record<string, unknown>;
+type ModelRow = { id: string; name: string; enabled: boolean; default_params?: JsonObject };
 type FetchedModelCandidate = { id: string; label: string };
 
 const channelTypes = [
@@ -102,23 +105,49 @@ const formatApiKeys = (apiKeys?: string[]): string => {
   return (apiKeys || []).join("\n");
 };
 
+const normalizeDefaultParams = (defaultParams: unknown): JsonObject | undefined => {
+  if (!defaultParams || typeof defaultParams !== "object" || Array.isArray(defaultParams)) {
+    return undefined;
+  }
+
+  if (Object.keys(defaultParams).length === 0) {
+    return undefined;
+  }
+
+  return defaultParams as JsonObject;
+};
+
 const normalizeModels = (models?: ChannelModelMapping[]): ChannelModelMapping[] => {
   if (!Array.isArray(models)) {
     return [];
   }
 
   return models
-    .map((model) => ({
-      id: typeof model?.id === "string" ? model.id.trim() : "",
-      name: typeof model?.name === "string" ? model.name.trim() : "",
-      enabled: model?.enabled !== false,
-    }))
+    .map((model) => {
+      const normalizedModel: ChannelModelMapping = {
+        id: typeof model?.id === "string" ? model.id.trim() : "",
+        name: typeof model?.name === "string" ? model.name.trim() : "",
+        enabled: model?.enabled !== false,
+      };
+      const defaultParams = normalizeDefaultParams(model?.default_params);
+      if (defaultParams) {
+        normalizedModel.default_params = defaultParams;
+      }
+      return normalizedModel;
+    })
     .filter((model) => model.id.length > 0)
-    .map((model) => ({
-      id: model.id,
-      name: model.name || model.id,
-      enabled: model.enabled,
-    }));
+    .map((model) => {
+      const normalizedModel: ChannelModelMapping = {
+        id: model.id,
+        name: model.name || model.id,
+        enabled: model.enabled,
+      };
+      const defaultParams = normalizeDefaultParams(model.default_params);
+      if (defaultParams) {
+        normalizedModel.default_params = defaultParams;
+      }
+      return normalizedModel;
+    });
 };
 
 const getChannelModels = (config: ChannelConfig): ChannelModelMapping[] => {
@@ -217,6 +246,7 @@ const buildRowsFromModels = (models: ChannelModelMapping[]): ModelRow[] => {
       id: model.id,
       name: model.name,
       enabled: model.enabled !== false,
+      default_params: normalizeDefaultParams(model.default_params),
     })),
   );
 };
@@ -225,15 +255,47 @@ const serializeModels = (models: ChannelModelMapping[]): string => {
   return JSON.stringify(models, null, 2);
 };
 
+const formatDefaultParams = (defaultParams?: JsonObject): string => {
+  return defaultParams ? JSON.stringify(defaultParams, null, 2) : "";
+};
+
+const validateDefaultParamsValue = (value: unknown): { defaultParams?: JsonObject; error?: string } => {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
+    return { error: i18n.t("channels.validation.defaultParamsJsonMustBeObject") };
+  }
+
+  return { defaultParams: normalizeDefaultParams(value) };
+};
+
+const parseDefaultParamsJson = (value: string): { defaultParams?: JsonObject; error?: string } => {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) {
+    return {};
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmedValue);
+  } catch {
+    return { error: i18n.t("channels.validation.defaultParamsJsonInvalid") };
+  }
+
+  return validateDefaultParamsValue(parsed);
+};
+
+const getDefaultParamsCount = (defaultParams?: JsonObject): number => {
+  return defaultParams ? Object.keys(defaultParams).length : 0;
+};
+
 const validateModels = (models: ChannelModelMapping[]): string | null => {
   if (models.length === 0) {
-    return i18n.t('channels.validation.atLeastOneModel');
+    return i18n.t("channels.validation.atLeastOneModel");
   }
 
   const names = new Set<string>();
   for (const model of models) {
     if (names.has(model.name)) {
-      return i18n.t('channels.validation.duplicateModelName', { name: model.name });
+      return i18n.t("channels.validation.duplicateModelName", { name: model.name });
     }
     names.add(model.name);
   }
@@ -246,14 +308,19 @@ const parseModelsFromRows = (rows: ModelRow[]): { models: ChannelModelMapping[];
 
   for (const row of activeRows) {
     if (!row.id.trim()) {
-      return { models: [], error: i18n.t('channels.validation.modelIdEmpty') };
+      return { models: [], error: i18n.t("channels.validation.modelIdEmpty") };
     }
   }
 
   const models = activeRows.map((row) => {
     const id = row.id.trim();
     const name = row.name.trim() || id;
-    return { id, name, enabled: row.enabled !== false };
+    const model: ChannelModelMapping = { id, name, enabled: row.enabled !== false };
+    const defaultParams = normalizeDefaultParams(row.default_params);
+    if (defaultParams) {
+      model.default_params = defaultParams;
+    }
+    return model;
   });
 
   const validationError = validateModels(models);
@@ -270,33 +337,43 @@ const parseModelsFromJson = (value: string): { models: ChannelModelMapping[]; er
   try {
     parsed = JSON.parse(value);
   } catch {
-    return { models: [], error: i18n.t('channels.validation.modelJsonInvalid') };
+    return { models: [], error: i18n.t("channels.validation.modelJsonInvalid") };
   }
 
   if (!Array.isArray(parsed)) {
-    return { models: [], error: i18n.t('channels.validation.modelJsonMustBeArray') };
+    return { models: [], error: i18n.t("channels.validation.modelJsonMustBeArray") };
   }
 
   const models: ChannelModelMapping[] = [];
 
   for (const item of parsed) {
     if (!item || typeof item !== "object") {
-      return { models: [], error: i18n.t('channels.validation.modelJsonItemMustBeObject') };
+      return { models: [], error: i18n.t("channels.validation.modelJsonItemMustBeObject") };
     }
 
     const id = typeof (item as ChannelModelMapping).id === "string" ? (item as ChannelModelMapping).id.trim() : "";
     const rawName =
       typeof (item as ChannelModelMapping).name === "string" ? (item as ChannelModelMapping).name.trim() : "";
+    const rawDefaultParams = (item as ChannelModelMapping).default_params;
 
     if (!id) {
-      return { models: [], error: i18n.t('channels.validation.modelJsonIdEmpty') };
+      return { models: [], error: i18n.t("channels.validation.modelJsonIdEmpty") };
     }
 
-    models.push({
+    const defaultParamsResult = rawDefaultParams == null ? {} : validateDefaultParamsValue(rawDefaultParams);
+    if (defaultParamsResult.error) {
+      return { models: [], error: defaultParamsResult.error };
+    }
+
+    const model: ChannelModelMapping = {
       id,
       name: rawName || id,
       enabled: (item as ChannelModelMapping).enabled !== false,
-    });
+    };
+    if (defaultParamsResult.defaultParams) {
+      model.default_params = defaultParamsResult.defaultParams;
+    }
+    models.push(model);
   }
 
   const validationError = validateModels(models);
@@ -338,9 +415,7 @@ const buildInitialFetchedModelSelection = (
   }
 
   const currentModelIds = new Set(currentModels.map((model) => model.id));
-  return candidates
-    .filter((candidate) => currentModelIds.has(candidate.id))
-    .map((candidate) => candidate.id);
+  return candidates.filter((candidate) => currentModelIds.has(candidate.id)).map((candidate) => candidate.id);
 };
 
 const trimSlashes = (value: string): string => value.replace(/^\/+|\/+$/g, "");
@@ -507,13 +582,17 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
   const [fetchedModelCandidates, setFetchedModelCandidates] = useState<FetchedModelCandidate[]>([]);
   const [selectedFetchedModelIds, setSelectedFetchedModelIds] = useState<string[]>([]);
   const [fetchedModelsSearchQuery, setFetchedModelsSearchQuery] = useState("");
+  const [isDefaultParamsDialogOpen, setIsDefaultParamsDialogOpen] = useState(false);
+  const [editingDefaultParamsRowIndex, setEditingDefaultParamsRowIndex] = useState<number | null>(null);
+  const [defaultParamsJsonValue, setDefaultParamsJsonValue] = useState("");
+  const [defaultParamsJsonError, setDefaultParamsJsonError] = useState<string | null>(null);
 
   const { addToast } = useToast();
   const queryClient = useQueryClient();
 
   const modelEditorModeOptions = [
-    { value: "visual" as const, label: t('common.visual') },
-    { value: "json" as const, label: t('common.json') },
+    { value: "visual" as const, label: t("common.visual") },
+    { value: "json" as const, label: t("common.json") },
   ];
 
   const applyModels = (models: ChannelModelMapping[]) => {
@@ -571,11 +650,11 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["channels"] });
-      addToast(editingKey ? t('channels.updateSuccess') : t('channels.addSuccess'), "success");
+      addToast(editingKey ? t("channels.updateSuccess") : t("channels.addSuccess"), "success");
       closeForm();
     },
     onError: (error: Error) => {
-      addToast(t('common.saveFailed', { message: error.message }), "error");
+      addToast(t("common.saveFailed", { message: error.message }), "error");
     },
   });
 
@@ -585,10 +664,10 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["channels"] });
-      addToast(t('channels.deleteSuccess'), "success");
+      addToast(t("channels.deleteSuccess"), "success");
     },
     onError: (error: Error) => {
-      addToast(t('common.deleteFailed', { message: error.message }), "error");
+      addToast(t("common.deleteFailed", { message: error.message }), "error");
     },
   });
 
@@ -622,13 +701,13 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
       return { previousChannels };
     },
     onSuccess: (_, { enabled }) => {
-      addToast(enabled ? t('channels.enabledToast') : t('channels.disabledToast'), "success");
+      addToast(enabled ? t("channels.enabledToast") : t("channels.disabledToast"), "success");
     },
     onError: (error: Error, _variables, context) => {
       if (context?.previousChannels) {
         queryClient.setQueryData(["channels"], context.previousChannels);
       }
-      addToast(t('channels.toggleFailed', { message: error.message }), "error");
+      addToast(t("channels.toggleFailed", { message: error.message }), "error");
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["channels"] });
@@ -642,7 +721,7 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
     onSuccess: (response) => {
       const candidates = normalizeFetchedModelCandidates((response.data as ChannelModelMapping[]) || []);
       if (candidates.length === 0) {
-        addToast(t('channels.noFetchedModels'), "error");
+        addToast(t("channels.noFetchedModels"), "error");
         return;
       }
 
@@ -653,7 +732,7 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
       setIsFetchedModelsDialogOpen(true);
     },
     onError: (error: Error) => {
-      addToast(t('channels.fetchModelsFailed', { message: error.message }), "error");
+      addToast(t("channels.fetchModelsFailed", { message: error.message }), "error");
     },
   });
 
@@ -669,6 +748,10 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
     setFetchedModelCandidates([]);
     setSelectedFetchedModelIds([]);
     setFetchedModelsSearchQuery("");
+    setIsDefaultParamsDialogOpen(false);
+    setEditingDefaultParamsRowIndex(null);
+    setDefaultParamsJsonValue("");
+    setDefaultParamsJsonError(null);
     setEditingKey(null);
     setEditMode("form");
   }, []);
@@ -690,7 +773,7 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
       if (!targetChannel) {
         resetForm();
         setView("list");
-        addToast(t('channels.notFound'), "error");
+        addToast(t("channels.notFound"), "error");
         navigate("/channels", { replace: true });
         return;
       }
@@ -722,7 +805,7 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
   };
 
   const handleDelete = (key: string) => {
-    if (confirm(t('channels.deleteConfirm'))) {
+    if (confirm(t("channels.deleteConfirm"))) {
       deleteMutation.mutate(key);
     }
   };
@@ -735,7 +818,7 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
     const apiKeys = parseApiKeys(apiKeysInput);
 
     if (!formData.type || !formData.endpoint || apiKeys.length === 0) {
-      addToast(t('channels.fillTypeEndpointKey'), "error");
+      addToast(t("channels.fillTypeEndpointKey"), "error");
       return;
     }
 
@@ -783,18 +866,18 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
       );
 
     if (selectedModels.length === 0) {
-      addToast(t('channels.selectAtLeastOneModel'), "error");
+      addToast(t("channels.selectAtLeastOneModel"), "error");
       return;
     }
 
     applyModels(selectedModels);
     setIsFetchedModelsDialogOpen(false);
-    addToast(t('channels.modelsApplied', { count: selectedModels.length }), "success");
+    addToast(t("channels.modelsApplied", { count: selectedModels.length }), "success");
   };
 
   const handleSave = () => {
     if (!channelKey) {
-      addToast(t('channels.fillChannelKey'), "error");
+      addToast(t("channels.fillChannelKey"), "error");
       return;
     }
 
@@ -807,7 +890,7 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
     }
 
     if (!formData.name || !formData.endpoint || apiKeys.length === 0) {
-      addToast(t('channels.fillRequired'), "error");
+      addToast(t("channels.fillRequired"), "error");
       return;
     }
 
@@ -823,7 +906,7 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
       try {
         config = normalizeChannelFormConfig(JSON.parse(jsonValue));
       } catch {
-        addToast(t('common.jsonFormatError'), "error");
+        addToast(t("common.jsonFormatError"), "error");
         return;
       }
 
@@ -867,7 +950,7 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
       loadFormConfig(config);
       setEditMode("form");
     } catch {
-      addToast(t('common.jsonFormatError'), "error");
+      addToast(t("common.jsonFormatError"), "error");
     }
   };
 
@@ -912,7 +995,7 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
     }
   };
 
-  const updateModelRow = (index: number, field: keyof ModelRow, value: string) => {
+  const updateModelRow = (index: number, field: "id" | "name", value: string) => {
     const nextRows = [...modelRows];
     const previousRow = nextRows[index] || createEmptyModelRow();
     const nextRow = {
@@ -926,6 +1009,66 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
 
     nextRows[index] = nextRow;
     updateModelRowsState(nextRows);
+  };
+
+  const closeDefaultParamsDialog = () => {
+    setIsDefaultParamsDialogOpen(false);
+    setEditingDefaultParamsRowIndex(null);
+    setDefaultParamsJsonValue("");
+    setDefaultParamsJsonError(null);
+  };
+
+  const openDefaultParamsDialog = (index: number) => {
+    const row = modelRows[index];
+    if (!row || isEmptyModelRow(row)) {
+      return;
+    }
+
+    setEditingDefaultParamsRowIndex(index);
+    setDefaultParamsJsonValue(formatDefaultParams(row.default_params));
+    setDefaultParamsJsonError(null);
+    setIsDefaultParamsDialogOpen(true);
+  };
+
+  const updateModelRowDefaultParams = (index: number, defaultParams?: JsonObject) => {
+    const nextRows = [...modelRows];
+    const row = nextRows[index];
+    if (!row) {
+      return;
+    }
+
+    nextRows[index] = {
+      ...row,
+      default_params: defaultParams,
+    };
+    updateModelRowsState(nextRows);
+  };
+
+  const handleFormatDefaultParamsJson = () => {
+    const result = parseDefaultParamsJson(defaultParamsJsonValue);
+    if (result.error) {
+      setDefaultParamsJsonError(result.error);
+      return;
+    }
+
+    setDefaultParamsJsonValue(formatDefaultParams(result.defaultParams));
+    setDefaultParamsJsonError(null);
+  };
+
+  const handleSaveDefaultParams = () => {
+    if (editingDefaultParamsRowIndex == null) {
+      closeDefaultParamsDialog();
+      return;
+    }
+
+    const result = parseDefaultParamsJson(defaultParamsJsonValue);
+    if (result.error) {
+      setDefaultParamsJsonError(result.error);
+      return;
+    }
+
+    updateModelRowDefaultParams(editingDefaultParamsRowIndex, result.defaultParams);
+    closeDefaultParamsDialog();
   };
 
   const removeModelRow = (index: number) => {
@@ -958,8 +1101,8 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
   if (view === "list") {
     return (
       <PageContainer
-        title={t('channels.title')}
-        description={t('channels.description')}
+        title={t("channels.title")}
+        description={t("channels.description")}
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
@@ -967,7 +1110,7 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
             </Button>
             <Button size="sm" onClick={handleAdd}>
               <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline ml-1">{t('common.add')}</span>
+              <span className="hidden sm:inline ml-1">{t("common.add")}</span>
             </Button>
           </div>
         }
@@ -977,7 +1120,7 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
             <div className="relative max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder={t('channels.searchPlaceholder')}
+                placeholder={t("channels.searchPlaceholder")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
@@ -990,7 +1133,7 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
           <div className="flex items-center justify-center py-20">
             <div className="flex flex-col items-center gap-3">
               <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-              <span className="text-sm text-muted-foreground">{t('common.loading')}</span>
+              <span className="text-sm text-muted-foreground">{t("common.loading")}</span>
             </div>
           </div>
         ) : !data || data.length === 0 ? (
@@ -999,13 +1142,13 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
               <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
                 <LinkIcon className="h-7 w-7 text-primary" />
               </div>
-              <h3 className="font-semibold text-lg mb-2">{t('channels.emptyTitle')}</h3>
+              <h3 className="font-semibold text-lg mb-2">{t("channels.emptyTitle")}</h3>
               <p className="text-muted-foreground text-sm text-center max-w-sm mb-6">
-                {t('channels.emptyDescription')}
+                {t("channels.emptyDescription")}
               </p>
               <Button onClick={handleAdd} size="lg">
                 <Plus className="h-4 w-4 mr-2" />
-                {t('channels.addChannel')}
+                {t("channels.addChannel")}
               </Button>
             </CardContent>
           </Card>
@@ -1019,8 +1162,8 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                 const enabledModelCount = (config.models || []).filter((model) => model.enabled !== false).length;
                 const modelSummary =
                   enabledModelCount === modelCount
-                    ? t('channels.modelCount', { count: modelCount })
-                    : t('channels.modelCountPartial', { enabled: enabledModelCount, total: modelCount });
+                    ? t("channels.modelCount", { count: modelCount })
+                    : t("channels.modelCountPartial", { enabled: enabledModelCount, total: modelCount });
                 const isMenuOpen = openMenu === channel.key;
                 const isEnabled = config.enabled !== false;
                 const isToggling =
@@ -1053,14 +1196,14 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                                 onClick={() => handleEdit(channel)}
                               >
                                 <Pencil className="h-4 w-4" />
-                                {t('common.edit')}
+                                {t("common.edit")}
                               </button>
                               <button
                                 className="w-full px-3 py-2 text-sm text-left hover:bg-muted flex items-center gap-2 text-destructive"
                                 onClick={() => handleDelete(channel.key)}
                               >
                                 <Trash2 className="h-4 w-4" />
-                                {t('common.delete')}
+                                {t("common.delete")}
                               </button>
                             </div>
                           )}
@@ -1079,7 +1222,7 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                       </div>
                       <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2">
                         <div>
-                          <div className="text-sm font-medium">{t('channels.runningStatus')}</div>
+                          <div className="text-sm font-medium">{t("channels.runningStatus")}</div>
                           <div
                             className={cn(
                               "mt-1 text-xs font-medium",
@@ -1088,14 +1231,14 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                                 : "text-amber-600 dark:text-amber-400",
                             )}
                           >
-                            {isEnabled ? t('common.enabled') : t('common.disabled')}
+                            {isEnabled ? t("common.enabled") : t("common.disabled")}
                           </div>
                         </div>
                         <Switch
                           checked={isEnabled}
                           disabled={isToggling}
                           onCheckedChange={(checked) => handleToggleEnabled(channel, checked)}
-                          aria-label={`${config.name || channel.key} ${t('channels.channelStatus')}`}
+                          aria-label={`${config.name || channel.key} ${t("channels.channelStatus")}`}
                         />
                       </div>
                     </div>
@@ -1128,7 +1271,7 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                           checked={isEnabled}
                           disabled={isToggling}
                           onCheckedChange={(checked) => handleToggleEnabled(channel, checked)}
-                          aria-label={`${config.name || channel.key} ${t('channels.channelStatus')}`}
+                          aria-label={`${config.name || channel.key} ${t("channels.channelStatus")}`}
                         />
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
@@ -1149,7 +1292,7 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                 );
               })}
               {filteredData?.length === 0 && searchQuery && (
-                <div className="p-8 text-center text-muted-foreground">{t('channels.noMatchingChannels')}</div>
+                <div className="p-8 text-center text-muted-foreground">{t("channels.noMatchingChannels")}</div>
               )}
             </div>
           </Card>
@@ -1164,7 +1307,7 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
         <div className="max-w-4xl mx-auto flex items-center justify-center py-20">
           <div className="flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-muted-foreground">{t('channels.loadingChannel')}</span>
+            <span className="text-sm text-muted-foreground">{t("channels.loadingChannel")}</span>
           </div>
         </div>
       </div>
@@ -1177,13 +1320,15 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
         <div className="mb-6">
           <Button variant="ghost" size="sm" className="mb-3 -ml-2 text-muted-foreground" onClick={closeForm}>
             <ArrowLeft className="h-4 w-4 mr-1" />
-            {t('common.back')}
+            {t("common.back")}
           </Button>
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold tracking-tight">{editingKey ? t('channels.editChannel') : t('channels.addChannel')}</h1>
+            <h1 className="text-2xl font-bold tracking-tight">
+              {editingKey ? t("channels.editChannel") : t("channels.addChannel")}
+            </h1>
             <Button variant="outline" size="sm" onClick={toggleEditMode}>
               {editMode === "form" ? <FileJson className="h-4 w-4 mr-1" /> : <FileText className="h-4 w-4 mr-1" />}
-              {editMode === "form" ? t('common.json') : t('common.form')}
+              {editMode === "form" ? t("common.json") : t("common.form")}
             </Button>
           </div>
         </div>
@@ -1191,12 +1336,12 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
         <div className="space-y-6">
           <Card>
             <CardContent className="p-5">
-              <h3 className="font-medium">{t('channels.channelKey')}</h3>
-              <p className="text-sm text-muted-foreground mb-4">{t('channels.channelKeyDesc')}</p>
+              <h3 className="font-medium">{t("channels.channelKey")}</h3>
+              <p className="text-sm text-muted-foreground mb-4">{t("channels.channelKeyDesc")}</p>
               <Input
                 value={channelKey}
                 onChange={(e) => setChannelKey(e.target.value)}
-                placeholder={t('channels.channelKeyPlaceholder')}
+                placeholder={t("channels.channelKeyPlaceholder")}
                 disabled={!!editingKey}
                 className="font-mono text-sm"
               />
@@ -1207,21 +1352,21 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
             <>
               <Card>
                 <CardContent className="p-5">
-                  <h3 className="font-medium mb-4">{t('channels.basicInfo')}</h3>
+                  <h3 className="font-medium mb-4">{t("channels.basicInfo")}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="text-sm">
-                        {t('channels.channelNameRequired')} <span className="text-destructive">*</span>
+                        {t("channels.channelNameRequired")} <span className="text-destructive">*</span>
                       </Label>
                       <Input
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        placeholder={t('channels.channelNamePlaceholder')}
+                        placeholder={t("channels.channelNamePlaceholder")}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-sm">
-                        {t('channels.channelTypeRequired')} <span className="text-destructive">*</span>
+                        {t("channels.channelTypeRequired")} <span className="text-destructive">*</span>
                       </Label>
                       <Select
                         value={formData.type}
@@ -1235,9 +1380,9 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-sm">{t('channels.channelWeight')}</Label>
+                      <Label className="text-sm">{t("channels.channelWeight")}</Label>
                       <ButtonGroup
-                        aria-label={t('channels.channelWeight')}
+                        aria-label={t("channels.channelWeight")}
                         value={normalizeChannelWeight(formData.weight)}
                         options={channelWeightOptions}
                         onValueChange={(value) =>
@@ -1249,10 +1394,10 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                         className="flex h-10 items-center px-2 gap-1"
                         buttonClassName="rounded-sm w-8 h-6 data-[state=on]:bg-amber-600 data-[state=on]:text-white"
                       />
-                      <p className="text-xs text-muted-foreground">{t('channels.channelWeightHint')}</p>
+                      <p className="text-xs text-muted-foreground">{t("channels.channelWeightHint")}</p>
                     </div>
                     <div className="">
-                      <Label className="text-sm">{t('channels.channelStatus')}</Label>
+                      <Label className="text-sm">{t("channels.channelStatus")}</Label>
                       <div className="h-10 flex items-center gap-3 mb-2 rounded-md px-3 border border-input hover:border-muted-foreground/30">
                         <span
                           className={cn(
@@ -1262,17 +1407,15 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                               : "text-amber-600 dark:text-amber-400",
                           )}
                         >
-                          {formData.enabled !== false ? t('common.enabled') : t('common.disabled')}
+                          {formData.enabled !== false ? t("common.enabled") : t("common.disabled")}
                         </span>
                         <Switch
                           checked={formData.enabled !== false}
                           onCheckedChange={(checked) => setFormData({ ...formData, enabled: checked })}
-                          aria-label={t('channels.channelStatus')}
+                          aria-label={t("channels.channelStatus")}
                         />
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        {t('channels.channelStatusHint')}
-                      </p>
+                      <p className="text-xs text-muted-foreground">{t("channels.channelStatusHint")}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -1284,25 +1427,27 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                     <div>
                       <h3 className="font-medium flex items-center gap-2">
                         <Globe className="h-4 w-4 text-muted-foreground" />
-                        {t('channels.connectionConfig')}
+                        {t("channels.connectionConfig")}
                       </h3>
                     </div>
                   </div>
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label className="text-sm flex items-center gap-2">
-                        {t('channels.apiEndpoint')} <span className="text-destructive">*</span>
+                        {t("channels.apiEndpoint")} <span className="text-destructive">*</span>
                       </Label>
                       <Input
                         value={formData.endpoint}
                         onChange={(e) => setFormData({ ...formData, endpoint: e.target.value })}
                         placeholder={endpointPlaceholder}
                       />
-                      <p className="text-xs text-muted-foreground">{t('channels.apiEndpointPreview', { preview: endpointPreview || formData.type })}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {t("channels.apiEndpointPreview", { preview: endpointPreview || formData.type })}
+                      </p>
                     </div>
                     <div className="space-y-2">
                       <Label className="text-sm">
-                        {t('channels.apiKeys')} <span className="text-destructive">*</span>
+                        {t("channels.apiKeys")} <span className="text-destructive">*</span>
                       </Label>
                       <Textarea
                         value={apiKeysInput}
@@ -1314,9 +1459,7 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                         rows={5}
                         className="font-mono text-sm"
                       />
-                      <p className="text-xs text-muted-foreground">
-                        {t('channels.apiKeysHint')}
-                      </p>
+                      <p className="text-xs text-muted-foreground">{t("channels.apiKeysHint")}</p>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <label className="flex items-start gap-3 p-4 rounded-lg border bg-muted/30 cursor-pointer">
@@ -1326,8 +1469,8 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                           onCheckedChange={(checked) => setFormData({ ...formData, auto_retry: checked })}
                         />
                         <div>
-                          <div className="text-sm font-medium">{t('channels.autoRetry')}</div>
-                          <p className="mt-1 text-xs text-muted-foreground">{t('channels.autoRetryHint')}</p>
+                          <div className="text-sm font-medium">{t("channels.autoRetry")}</div>
+                          <p className="mt-1 text-xs text-muted-foreground">{t("channels.autoRetryHint")}</p>
                         </div>
                       </label>
                       <label className="flex items-start gap-3 p-4 rounded-lg border bg-muted/30 cursor-pointer">
@@ -1337,10 +1480,8 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                           onCheckedChange={(checked) => setFormData({ ...formData, auto_rotate: checked })}
                         />
                         <div>
-                          <div className="text-sm font-medium">{t('channels.autoRotate')}</div>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {t('channels.autoRotateHint')}
-                          </p>
+                          <div className="text-sm font-medium">{t("channels.autoRotate")}</div>
+                          <p className="mt-1 text-xs text-muted-foreground">{t("channels.autoRotateHint")}</p>
                         </div>
                       </label>
                     </div>
@@ -1354,15 +1495,13 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                     <div>
                       <h3 className="font-medium flex items-center gap-2">
                         <Cpu className="h-4 w-4 text-muted-foreground" />
-                        {t('channels.modelConfig')}
+                        {t("channels.modelConfig")}
                       </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {t('channels.modelConfigDesc')}
-                      </p>
+                      <p className="text-sm text-muted-foreground">{t("channels.modelConfigDesc")}</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <ButtonGroup
-                        aria-label={t('channels.modelConfig')}
+                        aria-label={t("channels.modelConfig")}
                         value={modelEditorMode}
                         options={modelEditorModeOptions}
                         onValueChange={setModelEditorModeWithSync}
@@ -1376,64 +1515,93 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                         disabled={fetchModelsMutation.isPending}
                       >
                         <RefreshCw className={cn("h-4 w-4", fetchModelsMutation.isPending && "animate-spin")} />
-                        {t('channels.fetchModelList')}
+                        {t("channels.fetchModelList")}
                       </Button>
                     </div>
                   </div>
 
                   {modelEditorMode === "visual" ? (
-                    <div className="space-y-2">
-                      <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_100px] md:gap-2 text-xs font-medium text-muted-foreground">
-                        <div>{t('channels.modelId')}</div>
-                        <div>{t('channels.modelName')}</div>
-                        <div className="text-center">{t('channels.modelStatusDelete')}</div>
-                      </div>
-                      {modelRows.map((row, index) => {
-                        const canDelete = !isEmptyModelRow(row);
+                    <TooltipProvider delayDuration={120}>
+                      <div className="space-y-2">
+                        <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_50px_100px] md:gap-2 text-xs font-medium text-muted-foreground">
+                          <div>{t("channels.modelId")}</div>
+                          <div>{t("channels.modelName")}</div>
+                          <div className="text-center">{t("channels.defaultParams")}</div>
+                          <div className="text-center">{t("channels.modelStatusDelete")}</div>
+                        </div>
+                        {modelRows.map((row, index) => {
+                          const canDelete = !isEmptyModelRow(row);
+                          const defaultParamsCount = getDefaultParamsCount(row.default_params);
+                          const defaultParamsLabel =
+                            defaultParamsCount > 0
+                              ? t("channels.defaultParamsConfigured", { count: defaultParamsCount })
+                              : t("channels.defaultParamsEmpty");
 
-                        return (
-                          <div
-                            key={index}
-                            className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_100px] gap-2"
-                          >
-                            <Input
-                              value={row.id}
-                              onChange={(e) => updateModelRow(index, "id", e.target.value)}
-                              placeholder={t('channels.modelIdPlaceholder')}
-                              className="text-sm"
-                            />
-                            <Input
-                              value={row.name}
-                              onChange={(e) => updateModelRow(index, "name", e.target.value)}
-                              placeholder={t('channels.modelNamePlaceholder')}
-                              className="text-sm"
-                            />
-                            <div className="flex h-10 items-center justify-center gap-2">
-                              <Switch
-                                checked={row.enabled !== false}
-                                onCheckedChange={(checked) => {
-                                  const nextRows = [...modelRows];
-                                  nextRows[index] = { ...row, enabled: checked };
-                                  updateModelRowsState(nextRows);
-                                }}
-                                disabled={!canDelete}
-                                aria-label={`${row.name || row.id || index}`}
+                          return (
+                            <div
+                              key={index}
+                              className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_50px_100px] gap-2"
+                            >
+                              <Input
+                                value={row.id}
+                                onChange={(e) => updateModelRow(index, "id", e.target.value)}
+                                placeholder={t("channels.modelIdPlaceholder")}
+                                className="text-sm"
                               />
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-destructive hover:text-destructive justify-self-start md:justify-self-center"
-                                onClick={() => removeModelRow(index)}
-                                disabled={!canDelete}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              <Input
+                                value={row.name}
+                                onChange={(e) => updateModelRow(index, "name", e.target.value)}
+                                placeholder={t("channels.modelNamePlaceholder")}
+                                className="text-sm"
+                              />
+                              <div className="flex h-10 items-center justify-center">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className={cn(
+                                        "h-7 w-7 border border-transparent bg-transparent text-muted-foreground",
+                                        defaultParamsCount > 0 && "text-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/20 hover:text-emerald-600",
+                                      )}
+                                      onClick={() => openDefaultParamsDialog(index)}
+                                      disabled={!canDelete}
+                                      aria-label={defaultParamsLabel}
+                                    >
+                                      <SlidersHorizontal />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{defaultParamsLabel}</TooltipContent>
+                                </Tooltip>
+                              </div>
+                              <div className="flex h-10 items-center justify-center gap-2">
+                                <Switch
+                                  checked={row.enabled !== false}
+                                  onCheckedChange={(checked) => {
+                                    const nextRows = [...modelRows];
+                                    nextRows[index] = { ...row, enabled: checked };
+                                    updateModelRowsState(nextRows);
+                                  }}
+                                  disabled={!canDelete}
+                                  aria-label={`${row.name || row.id || index}`}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive hover:text-destructive justify-self-start md:justify-self-center"
+                                  onClick={() => removeModelRow(index)}
+                                  disabled={!canDelete}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    </TooltipProvider>
                   ) : (
                     <div className="space-y-2">
                       <Textarea
@@ -1441,11 +1609,9 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                         onChange={(e) => setModelJsonValue(e.target.value)}
                         rows={12}
                         className="font-mono text-sm"
-                        placeholder='[{"id":"gpt-4.1-mini","name":"gpt-4.1-mini","enabled":true}]'
+                        placeholder='[{"id":"gpt-4.1-mini","name":"gpt-4.1-mini","enabled":true,"default_params":{"temperature":0.7}}]'
                       />
-                      <p className="text-xs text-muted-foreground">
-                        {t('channels.modelJsonStructure')}
-                      </p>
+                      <p className="text-xs text-muted-foreground">{t("channels.modelJsonStructure")}</p>
                     </div>
                   )}
                 </CardContent>
@@ -1454,25 +1620,71 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
           ) : (
             <Card>
               <CardContent className="p-5">
-                <h3 className="font-medium mb-4">{t('channels.jsonConfig')}</h3>
+                <h3 className="font-medium mb-4">{t("channels.jsonConfig")}</h3>
                 <Textarea
                   value={jsonValue}
                   onChange={(e) => setJsonValue(e.target.value)}
                   rows={18}
                   className="font-mono text-sm"
-                  placeholder='{"name":"Azure OpenAI","type":"azure-openai","endpoint":"https://example.openai.azure.com/","enabled":true,"weight":0,"api_keys":["sk-1","sk-2"],"auto_retry":true,"auto_rotate":true,"models":[{"id":"gpt-4.1-mini","name":"gpt-4.1-mini","enabled":true}]}'
+                  placeholder='{"name":"Azure OpenAI","type":"azure-openai","endpoint":"https://example.openai.azure.com/","enabled":true,"weight":0,"api_keys":["sk-1","sk-2"],"auto_retry":true,"auto_rotate":true,"models":[{"id":"gpt-4.1-mini","name":"gpt-4.1-mini","enabled":true,"default_params":{"temperature":0.7}}]}'
                 />
               </CardContent>
             </Card>
           )}
 
+          <Dialog
+            open={isDefaultParamsDialogOpen}
+            onOpenChange={(open) => {
+              if (open) {
+                setIsDefaultParamsDialogOpen(true);
+                return;
+              }
+              closeDefaultParamsDialog();
+            }}
+          >
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>{t("channels.defaultParamsDialogTitle")}</DialogTitle>
+                <DialogDescription>{t("channels.defaultParamsDialogDesc")}</DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-3">
+                <Textarea
+                  value={defaultParamsJsonValue}
+                  onChange={(event) => {
+                    setDefaultParamsJsonValue(event.target.value);
+                    if (defaultParamsJsonError) {
+                      setDefaultParamsJsonError(null);
+                    }
+                  }}
+                  rows={12}
+                  className="font-mono text-sm"
+                  placeholder={t("channels.defaultParamsPlaceholder")}
+                />
+                {defaultParamsJsonError && <p className="text-sm text-destructive">{defaultParamsJsonError}</p>}
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <Button type="button" variant="outline" onClick={handleFormatDefaultParamsJson}>
+                    <FileJson className="h-4 w-4" />
+                    {t("channels.formatJson")}
+                  </Button>
+                  <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <Button type="button" variant="outline" onClick={closeDefaultParamsDialog}>
+                      {t("common.cancel")}
+                    </Button>
+                    <Button type="button" onClick={handleSaveDefaultParams}>
+                      {t("common.save")}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
           <Dialog open={isFetchedModelsDialogOpen} onOpenChange={setIsFetchedModelsDialogOpen}>
             <DialogContent className="max-w-3xl">
               <DialogHeader>
-                <DialogTitle>{t('channels.selectModelsTitle')}</DialogTitle>
-                <DialogDescription>
-                  {t('channels.selectModelsDesc')}
-                </DialogDescription>
+                <DialogTitle>{t("channels.selectModelsTitle")}</DialogTitle>
+                <DialogDescription>{t("channels.selectModelsDesc")}</DialogDescription>
               </DialogHeader>
 
               <div className="space-y-4">
@@ -1482,13 +1694,16 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                     <Input
                       value={fetchedModelsSearchQuery}
                       onChange={(event) => setFetchedModelsSearchQuery(event.target.value)}
-                      placeholder={t('channels.searchModelPlaceholder')}
+                      placeholder={t("channels.searchModelPlaceholder")}
                       className="pl-9"
                     />
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs text-muted-foreground">
-                      {t('channels.selectedCount', { selected: selectedFetchedModelIds.length, total: fetchedModelCandidates.length })}
+                      {t("channels.selectedCount", {
+                        selected: selectedFetchedModelIds.length,
+                        total: fetchedModelCandidates.length,
+                      })}
                     </span>
                     <Button
                       type="button"
@@ -1498,10 +1713,10 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                         setSelectedFetchedModelIds(fetchedModelCandidates.map((candidate) => candidate.id))
                       }
                     >
-                      {t('common.selectAll')}
+                      {t("common.selectAll")}
                     </Button>
                     <Button type="button" variant="outline" size="sm" onClick={() => setSelectedFetchedModelIds([])}>
-                      {t('common.clearAll')}
+                      {t("common.clearAll")}
                     </Button>
                   </div>
                 </div>
@@ -1533,16 +1748,18 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
                       })}
                     </div>
                   ) : (
-                    <div className="px-4 py-12 text-center text-sm text-muted-foreground">{t('channels.noMatchingModels')}</div>
+                    <div className="px-4 py-12 text-center text-sm text-muted-foreground">
+                      {t("channels.noMatchingModels")}
+                    </div>
                   )}
                 </div>
 
                 <div className="flex items-center justify-end gap-3">
                   <Button type="button" variant="outline" onClick={() => setIsFetchedModelsDialogOpen(false)}>
-                    {t('common.cancel')}
+                    {t("common.cancel")}
                   </Button>
                   <Button type="button" onClick={handleApplyFetchedModels}>
-                    {t('channels.applyModels')}
+                    {t("channels.applyModels")}
                   </Button>
                 </div>
               </div>
@@ -1551,18 +1768,18 @@ export function Channels({ createMode = false, editRoute = false }: { createMode
 
           <div className="flex items-center justify-end gap-3 pt-2">
             <Button variant="outline" onClick={closeForm}>
-              {t('common.cancel')}
+              {t("common.cancel")}
             </Button>
             <Button onClick={handleSave} disabled={saveMutation.isPending}>
               {saveMutation.isPending ? (
                 <>
                   <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  {t('common.saving')}
+                  {t("common.saving")}
                 </>
               ) : (
                 <>
                   <Check className="h-4 w-4 mr-2" />
-                  {t('channels.saveChannel')}
+                  {t("channels.saveChannel")}
                 </>
               )}
             </Button>
