@@ -7,6 +7,8 @@ const ADMIN_SESSION_TTL_WITH_TELEGRAM_MS = 30 * 24 * 60 * 60 * 1000;
 const ADMIN_LOGIN_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const ADMIN_LOGIN_CHALLENGE_MAX_ATTEMPTS = 5;
 const ADMIN_RATE_LIMIT_RETENTION_MS = 24 * 60 * 60 * 1000;
+const ARTIFACT_CLEANUP_INTERVAL_MS = 60_000;
+let lastArtifactCleanupAt = 0;
 const DEFAULT_SYSTEM_TIMEZONE = "Asia/Shanghai";
 const LOCAL_DEV_HOSTNAMES = new Set(["0.0.0.0", "127.0.0.1", "::1", "localhost"]);
 const ADMIN_TELEGRAM_CODE_NOTIFY_PER_IP_POLICY = {
@@ -226,6 +228,13 @@ const upsertAdminRateLimit = async (
 };
 
 const cleanupExpiredArtifacts = async (c: Context<HonoCustomType>) => {
+    // 每次管理员请求都执行三条 DELETE 开销过大，按 isolate 节流到 60s 一次
+    const nowMs = Date.now();
+    if (nowMs - lastArtifactCleanupAt < ARTIFACT_CLEANUP_INTERVAL_MS) {
+        return;
+    }
+    lastArtifactCleanupAt = nowMs;
+
     const now = new Date().toISOString();
     const rateLimitRetentionCutoff = new Date(Date.now() - ADMIN_RATE_LIMIT_RETENTION_MS).toISOString();
 
