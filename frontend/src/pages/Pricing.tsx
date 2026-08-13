@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
 import { Channel, PricingBillingMode, PricingConfig, PricingModel, Token } from "@/types";
 import { MultiSelectAutoCompleteInput, type AutoCompleteOption } from "@/components/ui/autocomplete";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -384,6 +383,30 @@ function MultiSelectAutocompleteField({
         inputClassName="h-10"
         maxOptions={8}
       />
+    </div>
+  );
+}
+
+type ChannelBadgesProps = {
+  channels: ChannelRef[];
+  emptyText: string;
+};
+
+function ChannelBadges({ channels, emptyText }: ChannelBadgesProps) {
+  if (channels.length === 0) {
+    return <span className="text-xs text-muted-foreground">{emptyText}</span>;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {channels.map((channel) => (
+        <div key={channel.key} className="border border-accent flex rounded-sm">
+          <span className="text-xs px-1.5 py-0.5 bg-accent text-muted-foreground border-r border-accent">
+            {channel.label}
+          </span>
+          <span className="text-xs px-1.5 py-0.5 text-muted-foreground/60">{channel.weight}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -882,54 +905,31 @@ export function Pricing() {
                 </p>
               </CardContent>
             </Card>
-          ) : filteredCards.length === 0 ? (
-            <Card className="border-0 py-16 text-center">
-              <CardContent>
-                <div className="text-lg font-semibold">{t('pricing.noMatchingCards')}</div>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {t('pricing.noMatchingCardsHint')}
-                </p>
-              </CardContent>
-            </Card>
           ) : (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {filteredCards.map((card) => (
-                <Card key={card.model}>
-                  <CardHeader className="p-4 pb-2 space-y-0.5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <CardTitle className="truncate font-mono text-base">{card.model}</CardTitle>
-                      </div>
-                      <Badge className={cn("w-3 h-3 p-0", card.isCustomized ? "bg-success" : "bg-background")}></Badge>
-                    </div>
-                    {card.isCustomized ? (
-                      <p className="text-xs text-muted-foreground/60">{formatEstimatedPricingCost(card)}</p>
-                    ) : (
-                      <p className="text-xs text-muted-foreground/60">{t('common.free')}</p>
-                    )}
-                  </CardHeader>
-
-                  <CardContent className="px-4 pb-4 space-y-2">
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 rounded-lg bg-background/60 px-3 py-2">
-                      {FIELD_META.map((field) => (
-                        <label key={field.key} className="flex flex-row items-center gap-1">
-                          <span className="mt-[1px] flex-shrink-0 text-xs font-medium text-muted-foreground">
-                            {field.label}
-                          </span>
-                          <Input
-                            type="number"
-                            min="0"
-                            step={PRICING_INPUT_STEP}
-                            value={card[field.key]}
-                            onChange={(event) => updateRow(card.model, field.key, event.target.value)}
-                            placeholder={field.placeholder}
-                            className="h-7 border-0 bg-transparent px-2 font-mono text-sm"
-                          />
-                        </label>
-                      ))}
-
-                      <label className="flex flex-row items-center gap-1">
-                        <div className="flex">
+            <Card>
+              <div className="divide-y">
+                {filteredCards.map((card) => (
+                  <div key={card.model} className="p-4 hover:bg-muted/30 transition-colors">
+                    {/* Mobile Layout */}
+                    <div className="md:hidden space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium font-mono truncate">{card.model}</span>
+                            <span
+                              className={cn(
+                                "w-2 h-2 rounded-full flex-shrink-0",
+                                card.isCustomized ? "bg-success" : "bg-muted",
+                              )}
+                            />
+                          </div>
+                          {card.isCustomized ? (
+                            <p className="text-xs text-muted-foreground/60 mt-0.5">{formatEstimatedPricingCost(card)}</p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground/60 mt-0.5">{t('common.free')}</p>
+                          )}
+                        </div>
+                        <div className="flex flex-shrink-0">
                           {BILLING_MODE_OPTIONS.map((option) => (
                             <Button
                               key={option.value}
@@ -945,33 +945,107 @@ export function Pricing() {
                             </Button>
                           ))}
                         </div>
-                      </label>
-                    </div>
+                      </div>
 
-                    {card.legacyRequest > 0 && (
-                      <p className="text-[11px] leading-5 text-muted-foreground">
-                        {t('pricing.legacyRequestNote', { price: card.legacyRequest.toFixed(PRICING_DECIMALS) })}
-                      </p>
-                    )}
+                      <div className="grid grid-cols-3 gap-2 rounded-lg bg-background/60 px-3 py-2">
+                        {FIELD_META.map((field) => (
+                          <label key={field.key} className="flex flex-col gap-0.5 min-w-0">
+                            <span className="text-xs font-medium text-muted-foreground">{field.label}</span>
+                            <Input
+                              type="number"
+                              min="0"
+                              step={PRICING_INPUT_STEP}
+                              value={card[field.key]}
+                              onChange={(event) => updateRow(card.model, field.key, event.target.value)}
+                              placeholder={field.placeholder}
+                              className="h-7 border-0 bg-transparent px-2 font-mono text-sm"
+                            />
+                          </label>
+                        ))}
+                      </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      {card.channels.length > 0 ? (
-                        card.channels.map((channel) => (
-                          <div key={channel.key} className="border border-accent flex rounded-sm">
-                            <span className="text-xs px-1.5 py-0.5 bg-accent text-muted-foreground border-r border-accent">
-                              {channel.label}
-                            </span>
-                            <span className="text-xs px-1.5 py-0.5 text-mist-600/60">{channel.weight}</span>
-                          </div>
-                        ))
-                      ) : (
-                        <span className="text-xs text-muted-foreground">{t('pricing.noChannelsForModel')}</span>
+                      {card.legacyRequest > 0 && (
+                        <p className="text-[11px] leading-5 text-muted-foreground">
+                          {t('pricing.legacyRequestNote', { price: card.legacyRequest.toFixed(PRICING_DECIMALS) })}
+                        </p>
                       )}
+
+                      <ChannelBadges channels={card.channels} emptyText={t('pricing.noChannelsForModel')} />
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+
+                    {/* Desktop Layout */}
+                    <div className="hidden md:flex md:items-center md:gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium font-mono truncate">{card.model}</span>
+                          <span
+                            className={cn(
+                              "w-2 h-2 rounded-full flex-shrink-0",
+                              card.isCustomized ? "bg-success" : "bg-muted",
+                            )}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="w-36 flex-shrink-0 text-center">
+                        {card.isCustomized ? (
+                          <span className="block text-xs text-muted-foreground/60 truncate">
+                            {formatEstimatedPricingCost(card)}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground/60">{t('common.free')}</span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-shrink-0">
+                        {BILLING_MODE_OPTIONS.map((option) => (
+                          <Button
+                            key={option.value}
+                            type="button"
+                            size="sm"
+                            className={cn(
+                              "h-6 px-2 text-xs shadow-none! bg-transparent! text-muted-foreground",
+                              card.billingMode === option.value && "bg-green-500/5! text-green-600",
+                            )}
+                            onClick={() => updateBillingMode(card.model, option.value)}
+                          >
+                            {option.label}
+                          </Button>
+                        ))}
+                      </div>
+
+                      {FIELD_META.map((field) => (
+                        <label key={field.key} className="flex items-center gap-1 w-32 flex-shrink-0">
+                          <span className="flex-shrink-0 text-xs font-medium text-muted-foreground">{field.label}</span>
+                          <Input
+                            type="number"
+                            min="0"
+                            step={PRICING_INPUT_STEP}
+                            value={card[field.key]}
+                            onChange={(event) => updateRow(card.model, field.key, event.target.value)}
+                            placeholder={field.placeholder}
+                            className="h-7 border-0 bg-background/60 px-2 font-mono text-sm"
+                          />
+                        </label>
+                      ))}
+
+                    </div>
+
+                    <div className="hidden md:block">
+                      <ChannelBadges channels={card.channels} emptyText={t('pricing.noChannelsForModel')} />
+                    </div>
+                  </div>
+                ))}
+                {filteredCards.length === 0 && (
+                  <div className="p-8 text-center">
+                    <div className="text-lg font-semibold">{t('pricing.noMatchingCards')}</div>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {t('pricing.noMatchingCardsHint')}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </Card>
           )
         ) : (
           <Card className="border-0">
