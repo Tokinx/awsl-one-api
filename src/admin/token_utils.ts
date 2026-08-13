@@ -133,7 +133,13 @@ export const TokenUtils = {
             return false;
         }
     },
-    async getPricing(c: Context<HonoCustomType>, model: string, channelConfig: ChannelConfig): Promise<ModelPricing | null> {
+    async getPricing(
+        c: Context<HonoCustomType>,
+        model: string,
+        channelConfig: ChannelConfig,
+        // 可传入提前读取的全局定价映射，避免循环内 N+1 查询
+        globalPricing: Record<string, ModelPricing> | null | undefined = undefined
+    ): Promise<ModelPricing | null> {
         // Check channel-specific pricing first
         const channelPricing = findPricingInMap(channelConfig?.model_pricing, model);
         if (channelPricing) {
@@ -141,7 +147,8 @@ export const TokenUtils = {
         }
 
         // Fallback to global pricing
-        const globalPricingMap = await getJsonSetting<Record<string, ModelPricing>>(c, CONSTANTS.MODEL_PRICING_KEY);
+        const globalPricingMap = globalPricing
+            ?? await getJsonSetting<Record<string, ModelPricing>>(c, CONSTANTS.MODEL_PRICING_KEY);
         return findPricingInMap(globalPricingMap, model);
     },
     normalizeQuota(value: unknown): number {
@@ -157,9 +164,10 @@ export const TokenUtils = {
     async modelRequiresPaidQuota(
         c: Context<HonoCustomType>,
         model: string,
-        channelConfig: ChannelConfig
+        channelConfig: ChannelConfig,
+        globalPricing: Record<string, ModelPricing> | null | undefined = undefined
     ): Promise<boolean> {
-        const pricing = await this.getPricing(c, model, channelConfig);
+        const pricing = await this.getPricing(c, model, channelConfig, globalPricing);
         return pricingRequiresQuota(pricing);
     },
 

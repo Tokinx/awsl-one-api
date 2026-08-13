@@ -1,7 +1,8 @@
 import { Context } from "hono"
 import { getApiKeyFromHeaders, fetchTokenData, fetchChannelsForToken } from "./auth"
 import { RouteId, getRoutePolicy } from "./route-policy"
-import { findChannelModelMapping } from "../../utils"
+import { findChannelModelMapping, getJsonSetting } from "../../utils"
+import { CONSTANTS } from "../../constants"
 import { TokenUtils } from "../../admin/token_utils"
 import { normalizeChannelConfig } from "../../channel-config"
 import {
@@ -136,10 +137,12 @@ export const resolveChannel = async (
     }
 
     if (!TokenUtils.hasRemainingQuota(tokenData.total_quota, usage)) {
+        // 一次性读取全局定价，避免对每个渠道重复查询
+        const globalPricing = await getJsonSetting<Record<string, ModelPricing>>(c, CONSTANTS.MODEL_PRICING_KEY);
         const freeChannels = await Promise.all(
             availableChannels.map(async (channel) => ({
                 channel,
-                requiresPaidQuota: await TokenUtils.modelRequiresPaidQuota(c, requestedModel, channel.config),
+                requiresPaidQuota: await TokenUtils.modelRequiresPaidQuota(c, requestedModel, channel.config, globalPricing),
             }))
         );
 
