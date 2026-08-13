@@ -79,6 +79,19 @@ export function copyToClipboard(text: string): Promise<void> {
 
 export function generateTokenKey(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const randomValues = new Uint32Array(48)
+    crypto.getRandomValues(randomValues)
+
+    let token = 'sk-'
+    for (let i = 0; i < 48; i++) {
+      token += chars.charAt(randomValues[i] % chars.length)
+    }
+    return token
+  }
+
+  // 旧环境回退
   let token = 'sk-'
   for (let i = 0; i < 48; i++) {
     token += chars.charAt(Math.floor(Math.random() * chars.length))
