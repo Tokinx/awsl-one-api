@@ -93,9 +93,12 @@ export const findDeploymentMapping = (
 ): { pattern: string; deployment: string } | null => {
     if (!deploymentMapper) return null;
 
-    // 1. 精确匹配优先
-    if (deploymentMapper[model]) {
-        return { pattern: model, deployment: deploymentMapper[model] };
+    // 1. 精确匹配优先（大小写不敏感）
+    const normalizedModel = model.toLowerCase();
+    for (const [pattern, deployment] of Object.entries(deploymentMapper)) {
+        if (pattern.toLowerCase() === normalizedModel) {
+            return { pattern, deployment };
+        }
     }
 
     // 2. 通配符匹配
@@ -121,8 +124,10 @@ export const findChannelModelMapping = (
 ): ChannelModelMapping | null => {
     const channelModels = getChannelModels(config);
 
+    // 精确匹配（大小写不敏感）
+    const normalizedModel = model.toLowerCase();
     for (const channelModel of channelModels) {
-        if (channelModel.name === model) {
+        if (channelModel.name.toLowerCase() === normalizedModel) {
             return channelModel;
         }
     }
@@ -142,8 +147,12 @@ export const findSupportedModel = (
 ): string | null => {
     if (!supportedModels || supportedModels.length === 0) return null;
 
-    if (supportedModels.includes(model)) {
-        return model;
+    // 精确匹配（大小写不敏感）
+    const normalizedModel = model.toLowerCase();
+    for (const supportedModel of supportedModels) {
+        if (supportedModel.toLowerCase() === normalizedModel) {
+            return supportedModel;
+        }
     }
 
     for (const pattern of supportedModels) {

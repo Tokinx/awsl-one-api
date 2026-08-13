@@ -33,3 +33,5 @@ lerna-debug.log*
 public*/
 bun.lock
 *.local.jsonc
+.zcode
+docs/

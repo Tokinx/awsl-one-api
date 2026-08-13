@@ -78,6 +78,27 @@ const pricingRequiresQuota = (pricing: ModelPricing | null): boolean => {
         || hasPositivePricingValue(pricing.cache);
 };
 
+// 从定价映射中查找模型定价，键名匹配大小写不敏感
+const findPricingInMap = (
+    pricingMap: Record<string, ModelPricing> | null | undefined,
+    model: string
+): ModelPricing | null => {
+    if (!pricingMap) return null;
+
+    if (pricingMap[model]) {
+        return pricingMap[model];
+    }
+
+    const normalizedModel = model.toLowerCase();
+    for (const [key, value] of Object.entries(pricingMap)) {
+        if (key.toLowerCase() === normalizedModel && value) {
+            return value;
+        }
+    }
+
+    return null;
+};
+
 // Token 工具对象
 export const TokenUtils = {
     async updateUsage(c: Context<HonoCustomType>, key: string, usageAmount: number): Promise<boolean> {
@@ -94,13 +115,14 @@ export const TokenUtils = {
     },
     async getPricing(c: Context<HonoCustomType>, model: string, channelConfig: ChannelConfig): Promise<ModelPricing | null> {
         // Check channel-specific pricing first
-        if (channelConfig?.model_pricing?.[model]) {
-            return channelConfig.model_pricing[model];
+        const channelPricing = findPricingInMap(channelConfig?.model_pricing, model);
+        if (channelPricing) {
+            return channelPricing;
         }
 
         // Fallback to global pricing
-        const globalPricingMap = await getJsonSetting(c, CONSTANTS.MODEL_PRICING_KEY);
-        return globalPricingMap?.[model] || null;
+        const globalPricingMap = await getJsonSetting<Record<string, ModelPricing>>(c, CONSTANTS.MODEL_PRICING_KEY);
+        return findPricingInMap(globalPricingMap, model);
     },
     normalizeQuota(value: unknown): number {
         return normalizeTokenQuota(value);

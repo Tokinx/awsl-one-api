@@ -10,8 +10,8 @@ One API on Workers — 基于 Cloudflare Workers 的 AI 统一网关，支持多
 
 ```bash
 bun install                          # 安装所有依赖（Bun workspaces，根目录一次安装包含 frontend）
-bun run dev                          # 同时启动 Vite 前端 (5173) + Worker 本地 (8788)
-bun run dev:worker                   # 仅启动 Worker（使用 wrangler.local.jsonc）
+bun run dev                          # 同时启动 Vite 前端 (5173) + Worker 本地 (默认 8787)
+bun run dev:worker                   # 仅启动 Worker（wrangler.local.jsonc，默认 localhost:8787）
 bun run dev:web                      # 仅启动前端 Vite 开发服务器
 bun run build                        # 构建前端到 public/（含 tsc 类型检查）
 bun run deploy                       # 构建 + 部署到 Cloudflare
@@ -19,7 +19,16 @@ bun run cf-typegen                   # 生成 Cloudflare 绑定类型到 worker-
 cd frontend && bun run lint          # 前端 ESLint 检查
 ```
 
-无专用测试框架。`bun run build` 作为基本类型检查；后端变更通过 `bun run dev` 启动后用管理界面的 API 测试页面验证。
+无专用测试框架；`bun run build` 和 `cd frontend && bun run lint` 是最小验证。仓库提供本地 E2E 脚本，需先启动 mock upstream 与本地 Worker：
+
+```bash
+bun run tests/mock-upstream.ts        # 启动模拟上游，默认 :9999
+bun run dev:worker                    # 另一个终端启动 Worker
+bash tests/setup-test-data.sh         # 写入本地测试渠道和 Token
+bash tests/run-e2e.sh                 # 验证代理链路、模型列表、认证失败、请求头清洗等
+```
+
+测试脚本依赖 `.dev.vars`/shell 环境变量与 `wrangler.local.jsonc` 的本地 D1；`setup-test-data.sh` 会写入并清理本地测试数据，不要对生产库执行。
 
 ## Architecture
 
@@ -71,8 +80,8 @@ D1 表：`channel_config`、`api_token`、`settings`、`admin_login_challenge`�
 ### Configuration
 
 - **`wrangler.jsonc`**: 生产部署配置
-- **`wrangler.local.jsonc`**: 本地开发配置（含 `FRONTEND_DEV_SERVER_URL`）
-- **`.dev.vars`**: 本地 secrets（`ADMIN_TOKEN`、`CF_API_TOKEN`、`CF_ACCOUNT_ID`）
+- **`wrangler.local.jsonc`**: 本地开发配置（含 `FRONTEND_DEV_SERVER_URL`、D1 与 Analytics Engine 绑定）
+- **`.dev.vars`**: 本地 secrets（`ADMIN_TOKEN`、`CF_API_TOKEN`、`CF_ACCOUNT_ID`），测试脚本也会优先读取
 - **`type.d.ts`**: `CloudflareBindings` 定义所有环境绑定
 
 ## Code Style
