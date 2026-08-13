@@ -121,8 +121,14 @@ const getApiTokenUsageColumnType = async (c: Context<HonoCustomType>): Promise<s
     return (usageColumn?.type || "").toUpperCase();
 };
 
-const createApiTokenTable = async (c: Context<HonoCustomType>) => {
-    await c.env.DB.exec(toSingleStatement(`
+const MIGRATION_LOCK_KEY = "db_migration_lock";
+const MIGRATION_LOCK_TTL_MS = 60_000;
+const MIGRATION_LOCK_WAIT_STEP_MS = 200;
+const MIGRATION_LOCK_WAIT_MAX_MS = 5_000;
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+const API_TOKEN_TABLE_SQL = toSingleStatement(`
 CREATE TABLE api_token (
     key TEXT PRIMARY KEY,
     value TEXT,
@@ -130,7 +136,57 @@ CREATE TABLE api_token (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )
-    `));
+    `);
+
+const acquireMigrationLock = async (c: Context<HonoCustomType>): Promise<boolean> => {
+    const result = await c.env.DB.prepare(
+        `INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)`
+    ).bind(MIGRATION_LOCK_KEY, new Date().toISOString()).run();
+
+    return Boolean(result.meta?.changes && result.meta.changes > 0);
+};
+
+const releaseMigrationLock = async (c: Context<HonoCustomType>): Promise<void> => {
+    await c.env.DB.prepare(
+        `DELETE FROM settings WHERE key = ?`
+    ).bind(MIGRATION_LOCK_KEY).run();
+};
+
+const getMigrationLockTimestamp = async (c: Context<HonoCustomType>): Promise<string | null> => {
+    return await c.env.DB.prepare(
+        `SELECT value FROM settings WHERE key = ?`
+    ).bind(MIGRATION_LOCK_KEY).first<string>("value");
+};
+
+const tryStealStaleMigrationLock = async (c: Context<HonoCustomType>): Promise<boolean> => {
+    const lockedAt = await getMigrationLockTimestamp(c);
+    if (!lockedAt) {
+        return false;
+    }
+
+    const lockedAtMs = Date.parse(lockedAt);
+    if (!Number.isFinite(lockedAtMs) || Date.now() - lockedAtMs < MIGRATION_LOCK_TTL_MS) {
+        return false;
+    }
+
+    // 持有者疑似异常中断，抢占过期锁
+    await releaseMigrationLock(c);
+    return acquireMigrationLock(c);
+};
+
+const waitForMigrationLock = async (c: Context<HonoCustomType>): Promise<boolean> => {
+    const deadline = Date.now() + MIGRATION_LOCK_WAIT_MAX_MS;
+    let lockHeld = await acquireMigrationLock(c);
+
+    while (!lockHeld && Date.now() < deadline) {
+        await sleep(MIGRATION_LOCK_WAIT_STEP_MS);
+        lockHeld = await tryStealStaleMigrationLock(c);
+        if (!lockHeld) {
+            lockHeld = await acquireMigrationLock(c);
+        }
+    }
+
+    return lockHeld;
 };
 
 const migrateApiTokenUsagePrecision = async (c: Context<HonoCustomType>) => {
@@ -143,49 +199,69 @@ const migrateApiTokenUsagePrecision = async (c: Context<HonoCustomType>) => {
         return;
     }
 
-    const sourceTable = hasLegacyTable ? "api_token_legacy_precision" : "api_token";
-    const legacyTokens = await c.env.DB.prepare(
-        `SELECT key, value, usage, created_at, updated_at FROM ${sourceTable}`
-    ).all<LegacyTokenRow>();
-
-    if (!hasLegacyTable && hasCurrentTable) {
-        await c.env.DB.exec(
-            `ALTER TABLE api_token RENAME TO api_token_legacy_precision`
-        );
+    // 迁移锁保证多 isolate 并发部署时只有一个执行破坏性操作
+    const lockHeld = await waitForMigrationLock(c);
+    if (!lockHeld) {
+        throw new Error("Timed out waiting for database migration lock");
     }
 
-    if (await doesTableExist(c, "api_token")) {
-        await c.env.DB.exec(`DROP TABLE IF EXISTS api_token`);
-    }
-
-    await createApiTokenTable(c);
-
-    for (const row of legacyTokens.results || []) {
-        let migratedValue = row.value;
-
-        try {
-            const tokenData = JSON.parse(row.value) as ApiTokenData;
-            migratedValue = JSON.stringify({
-                ...tokenData,
-                total_quota: legacyBillingAmountToRaw(tokenData.total_quota),
-            });
-        } catch (error) {
-            console.error(`Failed to migrate token config for ${row.key}:`, error);
+    try {
+        // 持锁后重新检查，等待期间其他 isolate 可能已完成迁移
+        const latestHasLegacyTable = await doesTableExist(c, "api_token_legacy_precision");
+        const latestHasCurrentTable = await doesTableExist(c, "api_token");
+        const latestUsageColumnType = latestHasCurrentTable ? await getApiTokenUsageColumnType(c) : "";
+        if (!latestHasLegacyTable && latestUsageColumnType === "INTEGER") {
+            return;
         }
 
-        await c.env.DB.prepare(
-            `INSERT INTO api_token (key, value, usage, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?)`
-        ).bind(
-            row.key,
-            migratedValue,
-            legacyBillingAmountToRaw(row.usage || 0),
-            row.created_at,
-            row.updated_at
-        ).run();
-    }
+        const sourceTable = latestHasLegacyTable ? "api_token_legacy_precision" : "api_token";
+        const legacyTokens = await c.env.DB.prepare(
+            `SELECT key, value, usage, created_at, updated_at FROM ${sourceTable}`
+        ).all<LegacyTokenRow>();
 
-    await c.env.DB.exec(`DROP TABLE IF EXISTS api_token_legacy_precision`);
+        // 破坏性操作打包为单个原子 batch，失败整体回滚
+        const statements: any[] = [];
+
+        if (!latestHasLegacyTable && latestHasCurrentTable) {
+            statements.push(c.env.DB.prepare(
+                `ALTER TABLE api_token RENAME TO api_token_legacy_precision`
+            ));
+        }
+
+        statements.push(c.env.DB.prepare(`DROP TABLE IF EXISTS api_token`));
+        statements.push(c.env.DB.prepare(API_TOKEN_TABLE_SQL));
+
+        for (const row of legacyTokens.results || []) {
+            let migratedValue = row.value;
+
+            try {
+                const tokenData = JSON.parse(row.value) as ApiTokenData;
+                migratedValue = JSON.stringify({
+                    ...tokenData,
+                    total_quota: legacyBillingAmountToRaw(tokenData.total_quota),
+                });
+            } catch (error) {
+                console.error(`Failed to migrate token config for ${row.key}:`, error);
+            }
+
+            statements.push(c.env.DB.prepare(
+                `INSERT INTO api_token (key, value, usage, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?)`
+            ).bind(
+                row.key,
+                migratedValue,
+                legacyBillingAmountToRaw(row.usage || 0),
+                row.created_at,
+                row.updated_at
+            ));
+        }
+
+        statements.push(c.env.DB.prepare(`DROP TABLE IF EXISTS api_token_legacy_precision`));
+
+        await c.env.DB.batch(statements);
+    } finally {
+        await releaseMigrationLock(c);
+    }
 };
 
 const dbOperations = {
