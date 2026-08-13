@@ -36,14 +36,16 @@ import { useTranslation } from "react-i18next";
 
 type EditMode = "form" | "json";
 const UNLIMITED_TOKEN_QUOTA = -1;
-const QUOTA_INPUT_PATTERN = /^-?\d*$/;
+const QUOTA_INPUT_PATTERN = /^-?\d*\.?\d*$/;
 
-const formatQuotaInputValue = (value: number): string => {
+const formatQuotaInputValue = (value: number, displayDecimals = DEFAULT_BILLING_DISPLAY_DECIMALS): string => {
   if (value === UNLIMITED_TOKEN_QUOTA) {
     return "-1";
   }
 
-  return String(Math.max(0, Math.round(rawBillingToUsd(value))));
+  const usdValue = Math.max(0, rawBillingToUsd(value));
+  const fixedValue = usdValue.toFixed(Math.max(0, displayDecimals));
+  return String(Number.parseFloat(fixedValue));
 };
 
 const parseQuotaInputValue = (value: string): number | null => {
@@ -56,7 +58,7 @@ const parseQuotaInputValue = (value: string): number | null => {
     return UNLIMITED_TOKEN_QUOTA;
   }
 
-  const parsed = Number.parseInt(trimmedValue, 10);
+  const parsed = Number(trimmedValue);
   if (!Number.isFinite(parsed) || parsed < 0) {
     return null;
   }
@@ -109,12 +111,12 @@ export function Tokens({ createMode = false, editRoute = false }: { createMode?:
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [openMenu, setOpenMenu] = useState<string | null>(null);
-  const [quotaInputValue, setQuotaInputValue] = useState(() => formatQuotaInputValue(0));
 
   const { addToast } = useToast();
   const queryClient = useQueryClient();
   const { data: billingConfig } = useBillingConfig();
   const displayDecimals = billingConfig?.displayDecimals ?? DEFAULT_BILLING_DISPLAY_DECIMALS;
+  const [quotaInputValue, setQuotaInputValue] = useState(() => formatQuotaInputValue(0, displayDecimals));
 
   const tokenQuotaOptions = [
     { label: t('tokens.quotaUnlimited'), value: UNLIMITED_TOKEN_QUOTA },
@@ -157,9 +159,9 @@ export function Tokens({ createMode = false, editRoute = false }: { createMode?:
     setFormData(normalizedConfig);
     setJsonValue(JSON.stringify(normalizedConfig, null, 2));
     setSelectedChannels(normalizedConfig.channel_keys);
-    setQuotaInputValue(formatQuotaInputValue(normalizedConfig.total_quota));
+    setQuotaInputValue(formatQuotaInputValue(normalizedConfig.total_quota, displayDecimals));
     setView("form");
-  }, []);
+  }, [displayDecimals]);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -215,8 +217,8 @@ export function Tokens({ createMode = false, editRoute = false }: { createMode?:
     setSelectedChannels([]);
     setEditingKey(null);
     setEditMode("form");
-    setQuotaInputValue(formatQuotaInputValue(0));
-  }, []);
+    setQuotaInputValue(formatQuotaInputValue(0, displayDecimals));
+  }, [displayDecimals]);
 
   useEffect(() => {
     if (createMode) {
@@ -336,7 +338,7 @@ export function Tokens({ createMode = false, editRoute = false }: { createMode?:
         };
         setFormData(normalizedConfig);
         setSelectedChannels(normalizedConfig.channel_keys || []);
-        setQuotaInputValue(formatQuotaInputValue(normalizedConfig.total_quota));
+        setQuotaInputValue(formatQuotaInputValue(normalizedConfig.total_quota, displayDecimals));
         setEditMode("form");
       } catch {
         addToast(t('common.jsonFormatError'), "error");
@@ -755,7 +757,7 @@ export function Tokens({ createMode = false, editRoute = false }: { createMode?:
                           setFormData({ ...formData, total_quota: parsedQuota });
                         }}
                         onBlur={() => {
-                          setQuotaInputValue(formatQuotaInputValue(normalizeTokenQuota(formData.total_quota)));
+                          setQuotaInputValue(formatQuotaInputValue(normalizeTokenQuota(formData.total_quota), displayDecimals));
                         }}
                         placeholder={t('tokens.quotaPlaceholder')}
                       />
@@ -765,7 +767,7 @@ export function Tokens({ createMode = false, editRoute = false }: { createMode?:
                         options={tokenQuotaOptions}
                         onValueChange={(value) => {
                           setFormData({ ...formData, total_quota: value });
-                          setQuotaInputValue(formatQuotaInputValue(value));
+                          setQuotaInputValue(formatQuotaInputValue(value, displayDecimals));
                         }}
                         className="h-10 items-center flex-nowrap"
                         buttonClassName="h-full w-full text-sm data-[state=on]:bg-green-100! data-[state=on]:text-white"
