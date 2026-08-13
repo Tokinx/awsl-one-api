@@ -98,8 +98,25 @@ const openapi = fromHono(app, {
   openapi_url: '/api/openapi.json'
 });
 
-// cors
-openapi.use('/*', cors());
+// CORS：公共 API（/v1/*）无凭据可默认放开；管理端仅放行显式配置的来源
+openapi.use('/v1/*', cors());
+
+openapi.use('/api/admin/*', async (c, next) => {
+    const adminCorsOrigins = (c.env.ADMIN_CORS_ORIGINS || "")
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean);
+
+    if (adminCorsOrigins.length === 0) {
+        await next();
+        return;
+    }
+
+    await cors({
+        origin: adminCorsOrigins,
+        credentials: true,
+    })(c, next);
+});
 
 app.use('*', async (c, next) => {
     const lang = resolveLanguage(c)
@@ -142,7 +159,11 @@ app.use('*', async (c, next) => {
 // global error handler
 openapi.onError((err, c) => {
   console.error(err)
-  return c.text(`${err.name} ${err.message}`, 500)
+  // 本地开发（经 Vite 代理）保留详情便于调试；对外统一脱敏
+  if (c.env.FRONTEND_DEV_SERVER_URL) {
+    return c.text(`${err.name} ${err.message}`, 500)
+  }
+  return c.text("Internal Server Error", 500)
 })
 
 openapi.route('/', providerApi)

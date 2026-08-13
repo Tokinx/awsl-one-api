@@ -6,6 +6,8 @@
   "workers_dev": true,
   "vars": {
     "USAGE_ANALYTICS_DATASET": "usage_events_by_token"
+    // 可选：管理端 API 允许的跨域来源（逗号分隔），未设置时仅允许同源访问
+    // "ADMIN_CORS_ORIGINS": "https://admin.example.com"
   },
   "secrets": {
     "required": [
