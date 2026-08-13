@@ -54,44 +54,49 @@ export const handleStreamResponse = async (
     requestBody: any,
     saveUsage: (usage: Usage) => Promise<void>
 ): Promise<void> => {
-    const reader = streamForServer?.getReader()
-    if (!reader) {
-        throw new Error("No reader found in response body")
-    }
-
-    const decoder = new TextDecoder('utf-8')
-    let buffer = ""
-    const usageSaved = { value: false }
-    const outputText = { value: "" }
-    const outputLimit = 200_000
-    while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        const chunk = decoder.decode(value, { stream: true })
-        buffer += chunk
-
-        if (!chunk.includes('\n')) continue
-
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ""
-
-        await processStreamData(lines, usageSaved, outputText, outputLimit, saveUsage)
-    }
-
-    if (buffer.trim()) {
-        await processStreamData([buffer], usageSaved, outputText, outputLimit, saveUsage)
-    }
-
-    if (!usageSaved.value) {
-        const estimatedUsage = estimateUsageFromBodies(
-            requestBody,
-            undefined,
-            outputText.value
-        )
-        if (estimatedUsage) {
-            await saveUsage(estimatedUsage)
+    try {
+        const reader = streamForServer?.getReader()
+        if (!reader) {
+            throw new Error("No reader found in response body")
         }
+
+        const decoder = new TextDecoder('utf-8')
+        let buffer = ""
+        const usageSaved = { value: false }
+        const outputText = { value: "" }
+        const outputLimit = 200_000
+        while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            const chunk = decoder.decode(value, { stream: true })
+            buffer += chunk
+
+            if (!chunk.includes('\n')) continue
+
+            const lines = buffer.split('\n')
+            buffer = lines.pop() || ""
+
+            await processStreamData(lines, usageSaved, outputText, outputLimit, saveUsage)
+        }
+
+        if (buffer.trim()) {
+            await processStreamData([buffer], usageSaved, outputText, outputLimit, saveUsage)
+        }
+
+        if (!usageSaved.value) {
+            const estimatedUsage = estimateUsageFromBodies(
+                requestBody,
+                undefined,
+                outputText.value
+            )
+            if (estimatedUsage) {
+                await saveUsage(estimatedUsage)
+            }
+        }
+    } catch (error) {
+        // 上游关闭或客户端断开都会让 tee 分支读取失败，属预期情况
+        console.warn("Stream processing interrupted (upstream closed or client disconnected):", error)
     }
 }
 

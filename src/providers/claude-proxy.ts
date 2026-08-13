@@ -203,40 +203,45 @@ const handleStreamResponse = async (
     streamForServer: ReadableStream<any> | undefined,
     saveUsage: (usage: Usage) => Promise<void>
 ): Promise<void> => {
-    const reader = streamForServer?.getReader()
-    if (!reader) {
-        throw new Error("No reader found in response body")
-    }
+    try {
+        const reader = streamForServer?.getReader()
+        if (!reader) {
+            throw new Error("No reader found in response body")
+        }
 
-    const decoder = new TextDecoder('utf-8')
-    let buffer = ""
+        const decoder = new TextDecoder('utf-8')
+        let buffer = ""
 
-    // Accumulator for token usage across stream events
-    const usageAccumulator = {
-        input_tokens: 0,
-        output_tokens: 0,
-    }
-    const usageSaved = { value: false }
+        // Accumulator for token usage across stream events
+        const usageAccumulator = {
+            input_tokens: 0,
+            output_tokens: 0,
+        }
+        const usageSaved = { value: false }
 
-    while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+        while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
 
-        const chunk = decoder.decode(value, { stream: true })
-        buffer += chunk
+            const chunk = decoder.decode(value, { stream: true })
+            buffer += chunk
 
-        // Wait until we have complete lines
-        if (!chunk.includes('\n')) continue
+            // Wait until we have complete lines
+            if (!chunk.includes('\n')) continue
 
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ""
+            const lines = buffer.split('\n')
+            buffer = lines.pop() || ""
 
-        await processStreamData(lines, usageAccumulator, usageSaved, saveUsage)
-    }
+            await processStreamData(lines, usageAccumulator, usageSaved, saveUsage)
+        }
 
-    // Process any remaining buffered data
-    if (buffer.trim()) {
-        await processStreamData([buffer], usageAccumulator, usageSaved, saveUsage)
+        // Process any remaining buffered data
+        if (buffer.trim()) {
+            await processStreamData([buffer], usageAccumulator, usageSaved, saveUsage)
+        }
+    } catch (error) {
+        // 上游关闭或客户端断开都会让 tee 分支读取失败，属预期情况
+        console.warn("Stream processing interrupted (upstream closed or client disconnected):", error)
     }
 }
 
@@ -274,10 +279,18 @@ export default {
 
         // Handle streaming response
         if (stream) {
-            const [streamForClient, streamForServer] = response.body?.tee() || []
+            if (!response.ok || !response.body) {
+                return response
+            }
+
+            const [streamForClient, streamForServer] = response.body.tee()
 
             // Process stream in background to extract usage
-            c.executionCtx.waitUntil(handleStreamResponse(c, streamForServer, saveUsage))
+            c.executionCtx.waitUntil(
+                handleStreamResponse(c, streamForServer, saveUsage).catch((error) => {
+                    console.warn("Failed to track usage from upstream stream:", error)
+                })
+            )
 
             return new Response(streamForClient, {
                 headers: response.headers,

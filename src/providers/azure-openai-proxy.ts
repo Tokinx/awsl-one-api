@@ -50,8 +50,16 @@ export default {
         trackingState.upstreamStatus = response.status
 
         if (stream) {
-            const [streamForClient, streamForServer] = response.body?.tee() || []
-            c.executionCtx.waitUntil(handleStreamResponse(c, streamForServer, saveUsage))
+            if (!response.ok || !response.body) {
+                return response
+            }
+
+            const [streamForClient, streamForServer] = response.body.tee()
+            c.executionCtx.waitUntil(
+                handleStreamResponse(c, streamForServer, saveUsage).catch((error) => {
+                    console.warn("Failed to track usage from upstream stream:", error)
+                })
+            )
             return new Response(streamForClient, {
                 headers: response.headers,
                 status: response.status,

@@ -110,30 +110,35 @@ export const handleStreamResponse = async (
     streamForServer: ReadableStream<any> | undefined,
     saveUsage: (usage: Usage) => Promise<void>
 ): Promise<void> => {
-    const reader = streamForServer?.getReader()
-    if (!reader) {
-        throw new Error("No reader found in response body")
-    }
+    try {
+        const reader = streamForServer?.getReader()
+        if (!reader) {
+            throw new Error("No reader found in response body")
+        }
 
-    const decoder = new TextDecoder('utf-8')
-    let buffer = ""
-    const usageSaved = { value: false }
-    while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+        const decoder = new TextDecoder('utf-8')
+        let buffer = ""
+        const usageSaved = { value: false }
+        while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
 
-        const chunk = decoder.decode(value, { stream: true })
-        buffer += chunk
+            const chunk = decoder.decode(value, { stream: true })
+            buffer += chunk
 
-        if (!chunk.includes('\n')) continue
+            if (!chunk.includes('\n')) continue
 
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ""
+            const lines = buffer.split('\n')
+            buffer = lines.pop() || ""
 
-        await processStreamData(lines, usageSaved, saveUsage)
-    }
+            await processStreamData(lines, usageSaved, saveUsage)
+        }
 
-    if (buffer.trim()) {
-        await processStreamData([buffer], usageSaved, saveUsage)
+        if (buffer.trim()) {
+            await processStreamData([buffer], usageSaved, saveUsage)
+        }
+    } catch (error) {
+        // 上游关闭或客户端断开都会让 tee 分支读取失败，属预期情况
+        console.warn("Stream processing interrupted (upstream closed or client disconnected):", error)
     }
 }
