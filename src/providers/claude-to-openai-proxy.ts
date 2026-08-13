@@ -129,6 +129,7 @@ const convertClaudeToOpenAIRequest = (reqJson: any): any => {
             const openaiMsg: any = {
                 role: msg?.role,
             };
+            const toolResultMessages: any[] = [];
             const content = msg?.content;
 
             if (typeof content === "string") {
@@ -171,7 +172,7 @@ const convertClaudeToOpenAIRequest = (reqJson: any): any => {
                     if (blockType === "tool_result") {
                         const toolUseId = typeof block.tool_use_id === "string" ? block.tool_use_id : "";
                         const toolContent = extractTextFromContent(block.content);
-                        messages.push({
+                        toolResultMessages.push({
                             role: "tool",
                             content: toolContent,
                             tool_call_id: toolUseId,
@@ -194,6 +195,11 @@ const convertClaudeToOpenAIRequest = (reqJson: any): any => {
             // 只有当消息有实际内容时才添加（避免空 user 消息）
             if (openaiMsg.content != null || openaiMsg.tool_calls) {
                 messages.push(openaiMsg);
+            }
+
+            // tool_result 必须跟在所属消息之后，保持原始对话顺序
+            if (toolResultMessages.length > 0) {
+                messages.push(...toolResultMessages);
             }
         }
     }
