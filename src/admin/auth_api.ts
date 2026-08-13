@@ -179,7 +179,10 @@ export class AdminLoginStartEndpoint extends OpenAPIRoute {
         );
 
         if (!securityEnabled) {
-            return buildDirectLoginResponse(c, securityEnabled);
+            const response = await buildDirectLoginResponse(c, securityEnabled);
+            // 必须用 c.json 返回：chanfana 对普通对象会用 jsonResp 重建响应，
+            // 会丢失 setCookie 写入的 Set-Cookie 头
+            return c.json(response);
         }
 
         const challenge = await createAdminLoginChallenge(c);
@@ -208,7 +211,7 @@ export class AdminLoginStartEndpoint extends OpenAPIRoute {
             );
         }
 
-        return {
+        return c.json({
             success: true,
             data: {
                 requiresVerification: true,
@@ -218,7 +221,7 @@ export class AdminLoginStartEndpoint extends OpenAPIRoute {
                 sessionExpiresAt: null,
             },
             message: "Verification code sent",
-        } as CommonResponse;
+        });
     }
 }
 
@@ -329,7 +332,7 @@ export class AdminLoginVerifyEndpoint extends OpenAPIRoute {
             console.error("Failed to send Telegram login success notification:", error);
         });
 
-        return {
+        return c.json({
             success: true,
             data: {
                 requiresVerification: false,
@@ -339,7 +342,7 @@ export class AdminLoginVerifyEndpoint extends OpenAPIRoute {
                 sessionExpiresAt: session.expiresAt,
             },
             message: "Login verified successfully",
-        } as CommonResponse;
+        });
     }
 }
 
@@ -359,10 +362,10 @@ export class AdminLogoutEndpoint extends OpenAPIRoute {
         await invalidateAdminSession(c, sessionToken);
         clearAdminSessionCookie(c);
 
-        return {
+        return c.json({
             success: true,
             data: true,
             message: "Logout successful",
-        } as CommonResponse;
+        });
     }
 }
