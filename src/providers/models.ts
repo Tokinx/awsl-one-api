@@ -60,7 +60,15 @@ export class ModelsEndpoint extends OpenAPIRoute {
         const hasRemainingQuota = TokenUtils.hasRemainingQuota(tokenInfo.tokenData.total_quota, tokenInfo.usage);
 
         for (const row of channelsResult.results) {
-            const config = normalizeChannelConfig(JSON.parse(row.value) as ChannelConfig);
+            let config: ChannelConfig;
+
+            try {
+                config = normalizeChannelConfig(JSON.parse(row.value) as ChannelConfig);
+            } catch (error) {
+                console.error(`Invalid channel config for key: ${row.key}`, error);
+                continue;
+            }
+
             if (!config.enabled) {
                 continue;
             }

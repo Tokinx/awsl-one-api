@@ -22,8 +22,16 @@ export const fetchTokenData = async (c: Context<HonoCustomType>, apiKey: string)
         return null;
     }
 
+    let tokenData: ApiTokenData;
+    try {
+        tokenData = JSON.parse(tokenResult.value as string) as ApiTokenData;
+    } catch (error) {
+        console.error('Invalid token config, treating as invalid:', error);
+        return null;
+    }
+
     return {
-        tokenData: JSON.parse(tokenResult.value as string) as ApiTokenData,
+        tokenData,
         usage: tokenResult.usage as number || 0,
     };
 }
