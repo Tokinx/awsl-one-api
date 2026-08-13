@@ -14,6 +14,8 @@ type UsageCostResult = {
     outputCost: number;
     cacheCost: number;
     hasPricing: boolean;
+    // 扣费时已超出配额，本次用量未入账（usage 已顶到配额上限）
+    quotaExceeded?: boolean;
 }
 
 const UNLIMITED_TOKEN_QUOTA = -1;
@@ -103,11 +105,29 @@ const findPricingInMap = (
 export const TokenUtils = {
     async updateUsage(c: Context<HonoCustomType>, key: string, usageAmount: number): Promise<boolean> {
         try {
+            // 原子条件扣费：未超配额才累加，避免并发请求把 usage 打到配额以下（负余额）
             const result = await c.env.DB.prepare(
-                `UPDATE api_token SET usage = usage + ?, updated_at = datetime('now') WHERE key = ?`
-            ).bind(usageAmount, key).run();
+                `UPDATE api_token
+                 SET usage = usage + ?, updated_at = datetime('now')
+                 WHERE key = ?
+                   AND (json_extract(value, '$.total_quota') = -1
+                        OR usage + ? <= json_extract(value, '$.total_quota'))`
+            ).bind(usageAmount, key, usageAmount).run();
 
-            return result.success;
+            if (result.meta?.changes && result.meta.changes > 0) {
+                return true;
+            }
+
+            // 超出配额：把 usage 顶到上限，确保后续请求被预检拦截
+            await c.env.DB.prepare(
+                `UPDATE api_token
+                 SET usage = json_extract(value, '$.total_quota'), updated_at = datetime('now')
+                 WHERE key = ?
+                   AND json_extract(value, '$.total_quota') != -1
+                   AND usage < json_extract(value, '$.total_quota')`
+            ).bind(key).run();
+
+            return false;
         } catch (error) {
             console.error('Error updating token usage:', error);
             return false;
@@ -237,19 +257,28 @@ export const TokenUtils = {
         const costResult = await this.calculateUsageCost(c, model, targetChannelConfig, usage);
 
         if (costResult.hasPricing) {
-            await this.updateUsage(c, apiKey, costResult.totalCost);
+            const applied = await this.updateUsage(c, apiKey, costResult.totalCost);
 
             const maskedApiKey = apiKey.length < 3 ? '*'.repeat(apiKey.length) : (
                 apiKey.slice(0, apiKey.length / 3)
                 + '*'.repeat(apiKey.length / 3)
                 + apiKey.slice((2 * apiKey.length) / 3)
             );
-            console.log(
-                `Model: ${model}, Channel: ${targetChannelKey}, apiKey: ${maskedApiKey}, `
-                + `Cost: ${costResult.totalCost} (request: ${costResult.requestCost}, `
-                + `input: ${costResult.inputCost}, cache: ${costResult.cacheCost}, `
-                + `output: ${costResult.outputCost})`
-            );
+
+            if (!applied) {
+                costResult.quotaExceeded = true;
+                console.warn(
+                    `Quota exceeded for token, usage charge not applied: ${maskedApiKey}, `
+                    + `Model: ${model}, Cost: ${costResult.totalCost}`
+                );
+            } else {
+                console.log(
+                    `Model: ${model}, Channel: ${targetChannelKey}, apiKey: ${maskedApiKey}, `
+                    + `Cost: ${costResult.totalCost} (request: ${costResult.requestCost}, `
+                    + `input: ${costResult.inputCost}, cache: ${costResult.cacheCost}, `
+                    + `output: ${costResult.outputCost})`
+                );
+            }
         } else {
             console.warn(`No pricing found for model: ${model} in channel: ${targetChannelKey}`);
         }

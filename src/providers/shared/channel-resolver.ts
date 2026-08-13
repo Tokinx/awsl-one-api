@@ -206,7 +206,15 @@ export const resolveChannel = async (
                 activeChannel.config,
                 usage
             );
-            writeUsageSuccessEvent(c, usageContext, usage, costResult);
+
+            if (costResult.quotaExceeded) {
+                writeUsageFailureEvent(c, usageContext, {
+                    errorCode: "quota_exceeded",
+                    errorSummary: `Usage charge rejected: token quota exceeded (cost: ${costResult.totalCost})`,
+                });
+            } else {
+                writeUsageSuccessEvent(c, usageContext, usage, costResult);
+            }
             usageLogState = "done";
         } catch (error) {
             usageLogState = "idle";
